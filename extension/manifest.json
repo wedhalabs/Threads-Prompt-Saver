@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Threads Prompt Saver",
+  "version": "3.1.0",
+  "description": "Save a Threads post's images, videos and prompt text into a folder you choose, straight from the post.",
+  "permissions": [
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://*.fbcdn.net/*",
+    "https://*.cdninstagram.com/*"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.threads.com/*",
+        "https://www.threads.net/*"
+      ],
+      "js": ["extract.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

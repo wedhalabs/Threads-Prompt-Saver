@@ -1,0 +1,134 @@
+/*
+ * background.js
+ *
+ * Hands an extracted post to the offscreen document, which writes it into the
+ * folder chosen with Browse. The writing lives there because the File System
+ * Access API needs a document context, which a service worker doesn't have.
+ *
+ * Chrome only keeps a folder's write permission for the browser session, so
+ * saving reports what to do rather than quietly saving somewhere else.
+ */
+
+const SETUP_MESSAGE = {
+  "no-folder": "No save folder chosen yet. Open the extension's options and click Browse to pick one.",
+  "no-permission":
+    "Chrome has forgotten permission for your save folder — it asks again after each restart. " +
+    "Open the extension's options and click Re-allow.",
+  unsupported:
+    "This Chrome version can't write to a chosen folder. " +
+    "Chrome 109 or newer is required.",
+};
+
+/* Options tab -> the tab to go back to once setup finishes. */
+const returnTabs = new Map();
+
+async function openSetup(returnTabId, welcome) {
+  const url = chrome.runtime.getURL(`options.html?${welcome ? "welcome" : "setup"}=1`);
+  try {
+    const tab = await chrome.tabs.create({ url });
+    if (returnTabId != null && tab && tab.id != null) returnTabs.set(tab.id, returnTabId);
+  } catch (e) {
+    chrome.runtime.openOptionsPage();
+  }
+}
+
+/* Walk the user straight to picking a save folder, since nothing can be saved
+ * until they have. */
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") openSetup(null, true);
+});
+
+async function finishSetup(optionsTabId) {
+  const back = optionsTabId != null ? returnTabs.get(optionsTabId) : undefined;
+  if (back != null) {
+    try {
+      await chrome.tabs.update(back, { active: true });
+    } catch (e) {
+      /* the original tab may be gone */
+    }
+  }
+  if (optionsTabId != null) {
+    returnTabs.delete(optionsTabId);
+    try {
+      await chrome.tabs.remove(optionsTabId);
+    } catch (e) {
+      /* already closed */
+    }
+  }
+}
+
+async function hasOffscreen() {
+  if (chrome.offscreen && chrome.offscreen.hasDocument) {
+    try {
+      return await chrome.offscreen.hasDocument();
+    } catch (e) {
+      /* fall through to the context check below */
+    }
+  }
+  const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
+  return contexts.length > 0;
+}
+
+async function ensureOffscreen() {
+  if (!chrome.offscreen) return false;
+  try {
+    if (await hasOffscreen()) return true;
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["BLOBS"],
+      justification: "Write saved posts into the folder you chose.",
+    });
+    return true;
+  } catch (e) {
+    // A concurrent save may have created it first.
+    return hasOffscreen().catch(() => false);
+  }
+}
+
+async function savePost(post) {
+  if (!(await ensureOffscreen())) {
+    return { ok: false, error: SETUP_MESSAGE.unsupported, needsSetup: true };
+  }
+
+  let reply;
+  try {
+    reply = await chrome.runtime.sendMessage({ target: "offscreen", type: "save", post });
+  } catch (e) {
+    return { ok: false, error: "The extension's writer didn't respond. Try reloading the extension." };
+  }
+
+  if (reply && reply.ok) return reply;
+
+  const reason = (reply && reply.reason) || "unsupported";
+  if (SETUP_MESSAGE[reason]) {
+    return { ok: false, error: SETUP_MESSAGE[reason], needsSetup: true };
+  }
+  return {
+    ok: false,
+    error: "Couldn't write to your save folder." + (reply && reply.detail ? ` (${reply.detail})` : ""),
+  };
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg) return;
+
+  if (msg.type === "open-options") {
+    openSetup(sender.tab && sender.tab.id, false);
+    sendResponse({ ok: true });
+    return;
+  }
+
+  if (msg.type === "setup-done") {
+    finishSetup(sender.tab && sender.tab.id);
+    sendResponse({ ok: true });
+    return;
+  }
+
+  // Anything addressed to the offscreen document is not ours to handle.
+  if (msg.target === "offscreen" || msg.type !== "save") return;
+
+  savePost(msg.post)
+    .then(sendResponse)
+    .catch((e) => sendResponse({ ok: false, error: String((e && e.message) || e) }));
+  return true; // keep the channel open for the async reply
+});
