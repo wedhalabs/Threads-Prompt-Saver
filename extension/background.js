@@ -19,14 +19,14 @@ const SETUP_MESSAGE = {
     "Chrome 109 or newer is required.",
 };
 
-/* Options tab -> the tab to go back to once setup finishes. */
-const returnTabs = new Map();
-
+/* Which tab to return to is carried in the options URL rather than in a Map
+ * here: this worker can be evicted while the user is picking a folder, and
+ * module state would not survive that. */
 async function openSetup(returnTabId, welcome) {
-  const url = chrome.runtime.getURL(`options.html?${welcome ? "welcome" : "setup"}=1`);
+  const params = `${welcome ? "welcome" : "setup"}=1` +
+    (returnTabId != null ? `&back=${returnTabId}` : "");
   try {
-    const tab = await chrome.tabs.create({ url });
-    if (returnTabId != null && tab && tab.id != null) returnTabs.set(tab.id, returnTabId);
+    await chrome.tabs.create({ url: chrome.runtime.getURL(`options.html?${params}`) });
   } catch (e) {
     chrome.runtime.openOptionsPage();
   }
@@ -38,9 +38,9 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") openSetup(null, true);
 });
 
-async function finishSetup(optionsTabId) {
-  const back = optionsTabId != null ? returnTabs.get(optionsTabId) : undefined;
-  if (back != null) {
+async function finishSetup(optionsTabId, backTabId) {
+  const back = Number(backTabId);
+  if (Number.isInteger(back) && back >= 0) {
     try {
       await chrome.tabs.update(back, { active: true });
     } catch (e) {
@@ -48,7 +48,6 @@ async function finishSetup(optionsTabId) {
     }
   }
   if (optionsTabId != null) {
-    returnTabs.delete(optionsTabId);
     try {
       await chrome.tabs.remove(optionsTabId);
     } catch (e) {
@@ -65,8 +64,16 @@ async function hasOffscreen() {
       /* fall through to the context check below */
     }
   }
-  const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
-  return contexts.length > 0;
+  // getContexts is no older than hasDocument, so on the Chrome versions where
+  // that probe is missing this one is too. Report "no document" rather than
+  // throwing, which would stop the caller from ever creating one.
+  if (!chrome.runtime.getContexts) return false;
+  try {
+    const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
+    return contexts.length > 0;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function ensureOffscreen() {
@@ -119,7 +126,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "setup-done") {
-    finishSetup(sender.tab && sender.tab.id);
+    finishSetup(sender.tab && sender.tab.id, msg.back);
     sendResponse({ ok: true });
     return;
   }
