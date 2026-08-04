@@ -74,3 +74,11 @@ so the first line of real content is used.
   finding media, that's the most likely cause.
 - No AI, no API key and no per-save cost: the prompt text comes from the post
   itself.
+
+## License
+
+[MIT](LICENSE) © wedhalabs
+
+Saved posts belong to whoever wrote them. This licence covers the extension's
+own code, not the material you download with it — respect the rights of the
+authors whose posts you save.
