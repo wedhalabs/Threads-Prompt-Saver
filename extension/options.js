@@ -11,7 +11,10 @@ const GUIDED = PARAMS.has("welcome") || PARAMS.has("setup");
 async function finishIfGuided() {
   if (!GUIDED) return;
   flash("All set — taking you back…");
-  setTimeout(() => chrome.runtime.sendMessage({ type: "setup-done" }), 900);
+  setTimeout(
+    () => chrome.runtime.sendMessage({ type: "setup-done", back: PARAMS.get("back") }),
+    900
+  );
 }
 
 function flash(text) {

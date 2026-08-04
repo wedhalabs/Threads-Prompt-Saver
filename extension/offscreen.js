@@ -92,9 +92,14 @@ async function folderPostCode(dir) {
  *
  * A post is remembered by its id, so re-saving always reuses the folder it
  * already has — even when a newer version of the extension would derive a
- * different name from its prompt. A folder left by an earlier save is adopted
- * by reading the post id back out of its prompt.txt, so upgrading doesn't
- * strand a duplicate. Only a genuinely different post gets a new folder. */
+ * different name from its prompt.
+ *
+ * Returns { name, owned }. `owned` says whether this folder is provably the
+ * extension's own; only then may its old files be pruned. That matters because
+ * the folder name comes from the post's text, which anyone on Threads can
+ * choose: a post titled "Screenshots" must never be able to claim — and then
+ * delete inside — a folder of that name the user created themselves. An
+ * existing folder is adopted only when its prompt.txt names this same post. */
 async function resolveFolderName(root, post) {
   const code = post.code || "";
   let folders = {};
@@ -104,28 +109,36 @@ async function resolveFolderName(root, post) {
     /* treated as empty */
   }
 
-  const remember = async (name) => {
-    if (!code) return name;
-    folders[code] = name;
-    await tpsSetPostFolders(folders).catch(() => {});
-    return name;
+  const remember = async (name, owned) => {
+    if (code) {
+      folders[code] = name;
+      await tpsSetPostFolders(folders).catch(() => {});
+    }
+    return { name, owned };
   };
 
   const remembered = code && folders[code];
-  if (remembered && (await getFolder(root, remembered))) return remembered;
+  if (remembered && (await getFolder(root, remembered))) {
+    return { name: remembered, owned: true };
+  }
 
   const base = sanitizeSegment(post.title, sanitizeSegment(code, "threads_post"));
   const existing = await getFolder(root, base);
-  if (!existing) return remember(base);
+  // Nothing there yet, so the extension is about to create it.
+  if (!existing) return remember(base, true);
 
-  // Something is already there: adopt it if it holds this same post, which
-  // also covers folders written before ids were tracked.
+  // Something is already there. Only a prompt.txt naming this exact post
+  // proves it is ours; anything else — no prompt.txt, unreadable, or a
+  // different post — is somebody else's folder.
   const owner = await folderPostCode(existing);
-  if (!owner || owner === code) return remember(base);
+  if (owner && owner === code) return remember(base, true);
 
-  // A different post genuinely owns that name, so keep them apart.
+  // Not ours: use a distinct name rather than writing into it.
   const suffixed = `${base}_${sanitizeSegment(code, "post")}`;
-  return remember(suffixed);
+  const suffixedExisting = await getFolder(root, suffixed);
+  if (!suffixedExisting) return remember(suffixed, true);
+  const suffixedOwner = await folderPostCode(suffixedExisting);
+  return remember(suffixed, suffixedOwner === code);
 }
 
 async function writeFile(dir, name, data) {
@@ -154,47 +167,78 @@ async function savePost(post) {
   }
   if (permission !== "granted") return { ok: false, reason: "no-permission" };
 
+  // Download everything before touching the disk. Pruning a previous save
+  // first would mean a failed re-save leaves the user with less than they
+  // started with, while reporting only that the save failed.
+  const failures = [];
+  const fetched = [];
+  let images = 0;
+  let videos = 0;
+
+  for (const item of post.media || []) {
+    if (!item || !item.url) continue;
+    const kind = item.kind === "video" ? "video" : "image";
+    // Numbered per position, not per success, so one failed download can't
+    // renumber the rest on top of a previous save's files.
+    const n = kind === "video" ? ++videos : ++images;
+    try {
+      const res = await fetch(item.url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const blob = await res.blob();
+      fetched.push({
+        kind,
+        name: `${kind}${n}.${extensionFor(kind, item.url, blob.type)}`,
+        blob,
+      });
+    } catch (e) {
+      failures.push(`${kind}${n}: ${(e && e.message) || e}`);
+    }
+  }
+
+  if (!fetched.length) {
+    return {
+      ok: false,
+      reason: "write-failed",
+      detail: failures.length
+        ? failures.slice(0, 2).join("; ")
+        : "nothing could be downloaded",
+    };
+  }
+
   let folderName;
+  let owned;
   let dir;
   try {
-    folderName = await resolveFolderName(handle, post);
+    ({ name: folderName, owned } = await resolveFolderName(handle, post));
     dir = await handle.getDirectoryHandle(folderName, { create: true });
   } catch (e) {
     return { ok: false, reason: "write-failed", detail: String(e && e.message) };
   }
 
-  // Replace whatever a previous save of this post left behind. Names are
-  // collected first: removing entries while iterating is unreliable.
-  try {
-    const stale = [];
-    for await (const [name, entry] of dir.entries()) {
-      if (entry.kind === "file" && OURS_RE.test(name)) stale.push(name);
+  // Prune what a previous save of this post left behind — but only in a folder
+  // this extension provably owns, never one that merely shares its name. Names
+  // are collected first: removing entries while iterating is unreliable.
+  if (owned) {
+    try {
+      const stale = [];
+      for await (const [name, entry] of dir.entries()) {
+        if (entry.kind === "file" && OURS_RE.test(name)) stale.push(name);
+      }
+      for (const name of stale) {
+        await dir.removeEntry(name).catch(() => {});
+      }
+    } catch (e) {
+      /* listing is best-effort; writing still overwrites */
     }
-    for (const name of stale) {
-      await dir.removeEntry(name).catch(() => {});
-    }
-  } catch (e) {
-    /* listing is best-effort; overwriting still works */
   }
 
-  let images = 0;
-  let videos = 0;
-  const failures = [];
-
-  for (const item of post.media || []) {
-    if (!item || !item.url) continue;
-    const kind = item.kind === "video" ? "video" : "image";
-    const n = kind === "video" ? videos + 1 : images + 1;
+  const written = [];
+  for (const file of fetched) {
     try {
-      const res = await fetch(item.url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const blob = await res.blob();
-      const name = `${kind}${n}.${extensionFor(kind, item.url, blob.type)}`;
-      await writeFile(dir, name, blob);
-      if (kind === "video") videos++;
-      else images++;
+      await writeFile(dir, file.name, file.blob);
+      written.push(file);
     } catch (e) {
-      failures.push(`${kind}${n}: ${(e && e.message) || e}`);
+      failures.push(`${file.name}: ${(e && e.message) || e}`);
     }
   }
 
@@ -204,8 +248,10 @@ async function savePost(post) {
     failures.push("prompt.txt: " + ((e && e.message) || e));
   }
 
+  images = written.filter((f) => f.kind === "image").length;
+  videos = written.filter((f) => f.kind === "video").length;
   const saved = images + videos;
-  if (!saved && failures.length) {
+  if (!saved) {
     return { ok: false, reason: "write-failed", detail: failures.slice(0, 2).join("; ") };
   }
 

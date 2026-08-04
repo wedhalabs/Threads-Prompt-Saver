@@ -75,6 +75,12 @@
     btn.disabled = true;
     setStatus("Reading this post…");
 
+    // Threads is a single-page app, so the user can navigate to another post
+    // while this save runs. Report only if they're still on the post we saved,
+    // otherwise the result would appear to belong to whatever is on screen now.
+    const savingUrl = location.href;
+    const stillHere = () => location.href === savingUrl;
+
     try {
       const result = window.__threadsPromptSaver.extractPost();
       if (!result.ok) throw new Error(result.error);
@@ -87,6 +93,7 @@
       setStatus(`Found ${imgs} image(s), ${vids} video(s). Downloading…`);
 
       const reply = await chrome.runtime.sendMessage({ type: "save", post: result.post });
+      if (!stillHere()) return;
       if (!reply) throw new Error("No response from the extension worker.");
       if (!reply.ok) {
         setStatus(reply.error || "Save failed.", "err", reply.needsSetup);
@@ -99,10 +106,13 @@
         : "";
       setStatus(`Saved ${counts} to:\n${reply.folder}${partial}`, "ok");
     } catch (e) {
+      if (!stillHere()) return;
       const msg = String(e && e.message ? e.message : e);
       setStatus("Failed: " + msg, "err");
     } finally {
-      btn.disabled = false;
+      // The button may have been torn down and rebuilt by navigation.
+      const current = document.querySelector(`#${BTN_ID} button`);
+      if (current) current.disabled = false;
     }
   }
 
