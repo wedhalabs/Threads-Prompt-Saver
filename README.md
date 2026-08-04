@@ -31,6 +31,8 @@ than making a second copy.
 - turn on **Developer mode** (top right)
 - click **Load unpacked** and choose the `extension` folder from this repo
 
+![Loading the extension in Chrome](docs/demo.gif)
+
 **2. Choose where posts get saved.**
 
 Open the extension's options (its card on `chrome://extensions` →
