@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Threads Prompt Saver — Options</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; padding: 28px; max-width: 640px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { opacity: .7; margin: 0 0 22px; }
+  fieldset { border: 1px solid rgba(128,128,128,.35); border-radius: 10px;
+    padding: 16px 18px; margin: 0; }
+  legend { padding: 0 6px; font-weight: 600; }
+  .folder { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .folder-name { font-weight: 600; }
+  .muted { opacity: .7; }
+  .hint { opacity: .75; font-size: 12.5px; margin-top: 10px; }
+  .warn { display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+    font-size: 12.5px; background: rgba(210,140,0,.13); border: 1px solid rgba(210,140,0,.5); }
+  .warn.show { display: block; }
+  .banner { display: none; margin: 0 0 18px; padding: 12px 14px; border-radius: 10px;
+    font-size: 13px; background: rgba(108,140,255,.14); border: 1px solid rgba(108,140,255,.55); }
+  .banner.show { display: block; }
+  button { padding: 9px 16px; border-radius: 8px; border: 0; font-weight: 700;
+    font-size: 14px; cursor: pointer; background: #6c8cff; color: #0c0f16; }
+  button.ghost { background: transparent; color: inherit;
+    border: 1px solid rgba(128,128,128,.55); font-weight: 600; }
+  #status { margin-left: 10px; font-size: 13px; opacity: 0; transition: opacity .15s; }
+  #status.show { opacity: 1; }
+</style>
+
+<h1>Threads Prompt Saver</h1>
+<p class="sub">Where saved posts go.</p>
+
+<div id="welcome" class="banner">
+  <b>Almost ready.</b> Pick the folder your saved posts should go into — this is
+  the only thing to set up. Chrome will ask you to allow access to it.
+</div>
+
+<div id="setup" class="banner">
+  <b>Chrome needs permission again.</b> It forgets folder access each time the
+  browser restarts. Click <b>Re-allow</b> below and you'll go straight back to
+  the post.
+</div>
+
+<fieldset>
+  <legend>Save folder</legend>
+  <div class="folder">
+    <button id="browse" type="button">Browse…</button>
+    <span id="chosen" class="muted">No folder chosen</span>
+    <span id="status"></span>
+  </div>
+
+  <div id="regrant" class="warn">
+    Chrome has forgotten permission for this folder — it asks again each time
+    the browser restarts. Saving won't work until you
+    <button id="reallow" class="ghost" type="button">Re-allow</button>
+  </div>
+
+  <div class="hint">
+    Each post gets its own folder here, named after its prompt, holding its
+    images, videos and <b>prompt.txt</b>.
+  </div>
+  <div class="hint">
+    <button id="forget" class="ghost" type="button">Clear folder</button>
+  </div>
+</fieldset>
+
+<script src="idb.js"></script>
+<script src="options.js"></script>
