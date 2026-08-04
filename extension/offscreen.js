@@ -35,7 +35,75 @@ function extensionFor(kind, url, contentType) {
   return kind === "video" ? "mp4" : "jpg";
 }
 
-function promptText(post) {
+/* ---- optional prompt reconstruction ------------------------------------- *
+ * Some posts publish the prompt behind them; those are captured verbatim. For
+ * the ones that don't, the author's real prompt is simply not on the page and
+ * cannot be recovered — so if the user has configured a vision model, each
+ * image is described back into a prompt that would produce something similar.
+ * That is a reconstruction, and prompt.txt says so.
+ * ------------------------------------------------------------------------- */
+
+const RECONSTRUCT_SYSTEM =
+  "You look at a single image and write ONE prompt (4-7 sentences) that could be fed to an " +
+  "image generator to produce a similar image: subject, composition, typography, colour " +
+  "palette, lighting and overall style. Output only the prompt text — no preamble, no " +
+  "markdown, no quotes.";
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function reconstructPrompt(blob, config) {
+  const dataUrl = await blobToDataUrl(blob);
+  const res = await fetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: 500,
+      messages: [
+        { role: "system", content: RECONSTRUCT_SYSTEM },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Write the image-generation prompt for this image." },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  const text = data && data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message.content
+    : "";
+  return (text || "").trim();
+}
+
+async function reconstructAll(files, config) {
+  const out = [];
+  for (const file of files) {
+    if (file.kind !== "image") continue;
+    try {
+      const text = await reconstructPrompt(file.blob, config);
+      if (text) out.push({ name: file.name, text });
+    } catch (e) {
+      out.push({ name: file.name, text: `[could not reconstruct: ${(e && e.message) || e}]` });
+    }
+  }
+  return out;
+}
+
+function promptText(post, reconstructed) {
   const lines = [
     "PROMPT",
     `Source: ${post.url || ""}`,
@@ -55,7 +123,25 @@ function promptText(post) {
   }
   const snippet = (post.snippet || "").trim();
   if (snippet) lines.push("=".repeat(70), "MASTER PROMPT", "=".repeat(70), snippet, "");
-  if (!snippet && !parts.length) lines.push("[no caption or prompt text on this post]");
+
+  if (reconstructed && reconstructed.length) {
+    lines.push(
+      "=".repeat(70),
+      "RECONSTRUCTED PROMPTS",
+      "=".repeat(70),
+      "The author did not publish a prompt for this post. These were written by",
+      "a vision model looking at each saved image — they describe how to produce",
+      "a similar image, and are NOT the prompt the author actually used.",
+      ""
+    );
+    for (const item of reconstructed) {
+      lines.push("-".repeat(70), item.name, "-".repeat(70), item.text, "");
+    }
+  }
+
+  if (!snippet && !parts.length && !(reconstructed && reconstructed.length)) {
+    lines.push("[no caption or prompt text on this post]");
+  }
   return lines.join("\n").replace(/\s+$/, "") + "\n";
 }
 
@@ -242,8 +328,27 @@ async function savePost(post) {
     }
   }
 
+  // Only when the post published no prompt of its own — there is nothing to
+  // reconstruct otherwise, and every call costs the user money.
+  let reconstructed = [];
+  if (!(post.snippet || "").trim()) {
+    let apiConfig = null;
+    try {
+      apiConfig = await tpsGetApiConfig();
+    } catch (e) {
+      /* no config stored */
+    }
+    if (apiConfig && apiConfig.baseUrl && apiConfig.apiKey && apiConfig.model) {
+      reconstructed = await reconstructAll(written, apiConfig);
+    }
+  }
+
   try {
-    await writeFile(dir, "prompt.txt", new Blob([promptText(post)], { type: "text/plain" }));
+    await writeFile(
+      dir,
+      "prompt.txt",
+      new Blob([promptText(post, reconstructed)], { type: "text/plain" })
+    );
   } catch (e) {
     failures.push("prompt.txt: " + ((e && e.message) || e));
   }

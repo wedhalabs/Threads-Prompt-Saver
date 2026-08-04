@@ -15,6 +15,11 @@ const TPS_KEY = "saveDir";
  * already has, even if a later version of the extension would name it
  * differently. */
 const TPS_FOLDERS_KEY = "postFolders";
+/* Optional vision-model settings used to reconstruct a prompt for posts that
+ * don't publish one. Kept here rather than in chrome.storage so the extension
+ * needs no storage permission; it never leaves this machine except as a request
+ * to the endpoint the user configured. */
+const TPS_API_KEY = "apiConfig";
 
 function tpsOpenDb() {
   return new Promise((resolve, reject) => {
@@ -64,6 +69,26 @@ async function tpsSetPostFolders(map) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(TPS_STORE, "readwrite");
     tx.objectStore(TPS_STORE).put(map, TPS_FOLDERS_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function tpsGetApiConfig() {
+  const db = await tpsOpenDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TPS_STORE, "readonly");
+    const req = tx.objectStore(TPS_STORE).get(TPS_API_KEY);
+    req.onsuccess = () => resolve(req.result || { baseUrl: "", apiKey: "", model: "" });
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function tpsSetApiConfig(config) {
+  const db = await tpsOpenDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TPS_STORE, "readwrite");
+    tx.objectStore(TPS_STORE).put(config, TPS_API_KEY);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

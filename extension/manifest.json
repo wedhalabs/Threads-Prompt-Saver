@@ -16,6 +16,9 @@
     "https://*.fbcdn.net/*",
     "https://*.cdninstagram.com/*"
   ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
