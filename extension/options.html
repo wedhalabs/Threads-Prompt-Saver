@@ -16,6 +16,10 @@
   .folder-name { font-weight: 600; }
   .muted { opacity: .7; }
   .hint { opacity: .75; font-size: 12.5px; margin-top: 10px; }
+  label.row { display: block; margin: 0 0 6px; font-weight: 600; }
+  input[type=text], input[type=password] { width: 100%; padding: 9px 11px;
+    border-radius: 8px; font-size: 14px; border: 1px solid rgba(128,128,128,.5);
+    background: transparent; color: inherit; box-sizing: border-box; }
   .warn { display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px;
     font-size: 12.5px; background: rgba(210,140,0,.13); border: 1px solid rgba(210,140,0,.5); }
   .warn.show { display: block; }
@@ -64,6 +68,40 @@
   </div>
   <div class="hint">
     <button id="forget" class="ghost" type="button">Clear folder</button>
+  </div>
+</fieldset>
+
+<fieldset style="margin-top:18px;">
+  <legend>Reconstruct missing prompts <span style="font-weight:400;opacity:.7;">(optional)</span></legend>
+  <div class="hint" style="margin-top:0;">
+    When a post publishes its prompt, that prompt is saved exactly as written.
+    When it doesn't, the author's real prompt isn't on the page and can't be
+    recovered — but a vision model can look at each saved image and write a
+    prompt that would produce something similar. Saved under
+    <b>RECONSTRUCTED PROMPTS</b>, clearly marked as a guess.
+    <br /><br />
+    Leave blank and nothing is sent anywhere and nothing costs money. Filled in,
+    every image of a promptless post costs one API call — an 11-image carousel
+    is 11 calls.
+  </div>
+
+  <label class="row" for="apiBase" style="margin-top:14px;">API base URL</label>
+  <input type="text" id="apiBase" placeholder="https://openrouter.ai/api/v1" />
+
+  <label class="row" for="apiKey" style="margin-top:12px;">API key</label>
+  <input type="password" id="apiKey" placeholder="sk-…" />
+
+  <label class="row" for="apiModel" style="margin-top:12px;">Vision model</label>
+  <input type="text" id="apiModel" placeholder="anthropic/claude-sonnet-4.5" />
+
+  <div class="hint">
+    Any OpenAI-compatible endpoint works. The key is stored on this machine only
+    and is sent to no one but the URL above.
+  </div>
+  <div style="margin-top:12px;">
+    <button id="saveApi" type="button">Save</button>
+    <button id="clearApi" class="ghost" type="button">Clear</button>
+    <span id="apiStatus" style="margin-left:10px;font-size:13px;"></span>
   </div>
 </fieldset>
 

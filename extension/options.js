@@ -91,6 +91,94 @@ $("forget").addEventListener("click", async () => {
   flash("Folder cleared.");
 });
 
+/* ---- optional prompt reconstruction settings ----------------------------- */
+
+function apiFlash(text, ok) {
+  const el = $("apiStatus");
+  el.textContent = text;
+  el.style.color = ok === false ? "#c0392b" : "";
+  setTimeout(() => { el.textContent = ""; }, 3000);
+}
+
+function originOf(url) {
+  try {
+    return new URL(url).origin + "/*";
+  } catch (e) {
+    return null;
+  }
+}
+
+async function refreshApi() {
+  let config = { baseUrl: "", apiKey: "", model: "" };
+  try {
+    config = await tpsGetApiConfig();
+  } catch (e) {
+    /* leave blank */
+  }
+  $("apiBase").value = config.baseUrl || "";
+  $("apiModel").value = config.model || "";
+  // Only ever indicate that a key exists; never render it back into the page.
+  $("apiKey").value = "";
+  $("apiKey").placeholder = config.apiKey ? "•••••••• (saved)" : "sk-…";
+}
+
+$("saveApi").addEventListener("click", async () => {
+  const baseUrl = $("apiBase").value.trim();
+  const model = $("apiModel").value.trim();
+  const typedKey = $("apiKey").value.trim();
+
+  let existing = { apiKey: "" };
+  try {
+    existing = await tpsGetApiConfig();
+  } catch (e) {
+    /* none yet */
+  }
+  const apiKey = typedKey || existing.apiKey || "";
+
+  if (!baseUrl && !apiKey && !model) {
+    await tpsSetApiConfig({ baseUrl: "", apiKey: "", model: "" }).catch(() => {});
+    await refreshApi();
+    apiFlash("Cleared.");
+    return;
+  }
+  if (!baseUrl || !apiKey || !model) {
+    apiFlash("Need all three: URL, key and model.", false);
+    return;
+  }
+
+  const origin = originOf(baseUrl);
+  if (!origin) {
+    apiFlash("That URL doesn't look right.", false);
+    return;
+  }
+
+  // Ask for access to just this endpoint, on this click, rather than shipping a
+  // broad host permission everyone has to accept at install.
+  let granted = true;
+  try {
+    granted = await chrome.permissions.request({ origins: [origin] });
+  } catch (e) {
+    granted = false;
+  }
+  if (!granted) {
+    apiFlash("Chrome denied access to that endpoint.", false);
+    return;
+  }
+
+  await tpsSetApiConfig({ baseUrl, apiKey, model });
+  await refreshApi();
+  apiFlash("Saved.");
+});
+
+$("clearApi").addEventListener("click", async () => {
+  await tpsSetApiConfig({ baseUrl: "", apiKey: "", model: "" }).catch(() => {});
+  $("apiBase").value = "";
+  $("apiModel").value = "";
+  await refreshApi();
+  apiFlash("Cleared.");
+});
+
 if (PARAMS.has("welcome")) $("welcome").classList.add("show");
 if (PARAMS.has("setup")) $("setup").classList.add("show");
 refreshFolder();
+refreshApi();

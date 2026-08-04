@@ -44,6 +44,23 @@ restarting Chrome, the first save will say so and offer an *Open options*
 button; click **Re-allow** there and saving works again for that session. This
 is Chrome's rule for folder access and can't be turned off.
 
+**3. Optional — reconstruct prompts that were never published.**
+
+Plenty of posts show off AI-generated images without saying how they were made.
+That prompt isn't anywhere on the page, so it can't be recovered — but a vision
+model can look at each saved image and write a prompt that would produce
+something similar.
+
+Fill in an API base URL, key and vision model in the options page (any
+OpenAI-compatible endpoint, e.g. OpenRouter) and posts with no prompt of their
+own get a **RECONSTRUCTED PROMPTS** section in `prompt.txt`, marked plainly as a
+guess rather than the author's own words. Chrome asks for access to that one
+endpoint when you save the settings.
+
+Leave it blank and nothing is sent anywhere and nothing costs money. Filled in,
+each image of a promptless post is one API call — an 11-image carousel is 11
+calls. Posts that *do* publish a prompt never trigger it.
+
 ## Using it
 
 Open any Threads post in Chrome and click **Save post** at the top right of the
