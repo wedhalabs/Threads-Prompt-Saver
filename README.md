@@ -44,7 +44,18 @@ restarting Chrome, the first save will say so and offer an *Open options*
 button; click **Re-allow** there and saving works again for that session. This
 is Chrome's rule for folder access and can't be turned off.
 
-**3. Optional — reconstruct prompts that were never published.**
+**3. Optional — use the AI assistant you already pay for.**
+
+Posts often show off AI-generated images without saying how they were made, and
+that prompt is nowhere on the page, so nothing can recover it. The **Copy AI
+request** button prepares a message asking for the prompt behind the images —
+paste it into ChatGPT, Claude, Gemini or whatever you already use, and attach
+the saved images. Costs nothing beyond the subscription you have.
+
+The result is a reconstruction: a prompt that would produce something similar,
+not the author's own words.
+
+**4. Optional — do that automatically instead.**
 
 Plenty of posts show off AI-generated images without saying how they were made.
 That prompt isn't anywhere on the page, so it can't be recovered — but a vision
@@ -65,6 +76,10 @@ calls. Posts that *do* publish a prompt never trigger it.
 
 Open any Threads post in Chrome and click **Save post** at the top right of the
 page. It reports how many images and videos it saved, and where.
+
+**Copy AI request** sits below it: it copies a message asking an AI assistant to
+work out the prompt behind the post's images. Paste it into whichever assistant
+you use and attach the images that were just saved.
 
 After changing any extension file, hit the reload ↻ button on
 `chrome://extensions` — Chrome caches the old code otherwise.
