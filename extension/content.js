@@ -15,6 +15,11 @@
   const COPY_BTN = "tps-do-copy";
   const POST_URL_RE = /threads\.(?:com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+/;
 
+  /* Where the last save put its files, so the copy button can point at the
+   * folder to drag images from. A clipboard write can hold one item, so the
+   * images themselves can't ride along with the text. */
+  let lastSave = null;
+
   function onPostPage() {
     return POST_URL_RE.test(location.href);
   }
@@ -91,8 +96,10 @@
       .join("\n\n")
       .slice(0, 1200);
 
+    const files = imageCount === 1 ? "image1" : `image1 … image${imageCount}`;
+
     return [
-      `I'm attaching ${imageCount} image${imageCount === 1 ? "" : "s"} from a social media post.`,
+      `I'm attaching ${imageCount} image${imageCount === 1 ? "" : "s"} from a social media post (${files}).`,
       "The author didn't publish the prompt they used, so I want to work out how these were made.",
       "",
       "For each image, write the image-generation prompt that would recreate something like it.",
@@ -153,13 +160,18 @@
       const ok = await copyText(buildRequest(post, images));
       if (!ok) throw new Error("Chrome wouldn't let the page write to the clipboard.");
 
+      // Only the text is on the clipboard — a clipboard write holds a single
+      // item, so the images have to be dragged in from the saved folder.
+      const saved = lastSave && lastSave.code === post.code ? lastSave : null;
+      const where = saved
+        ? `\n\nThen drag in the ${saved.images} image(s) from:\n${saved.folder}`
+        : "\n\nThen drag in the post's images — click Save post first if you haven't.";
+
       setStatus(
-        published
-          ? "Copied. Note this post already publishes its own prompt, saved in prompt.txt — " +
-              "you probably don't need this.\n\nPaste into your AI assistant and attach the " +
-              `${images} saved image(s).`
-          : `Copied. Paste into your AI assistant and attach the ${images} saved image(s) ` +
-              "from this post's folder.",
+        (published
+          ? "Copied — though this post already publishes its own prompt, saved in prompt.txt, " +
+            "so you probably don't need this.\n\nPaste the text into your AI assistant."
+          : "Copied. Paste the text into your AI assistant.") + where,
         "ok"
       );
     } catch (e) {
@@ -199,6 +211,8 @@
         setStatus(reply.error || "Save failed.", "err", reply.needsSetup);
         return;
       }
+
+      lastSave = { code: result.post.code, folder: reply.folder, images: reply.images };
 
       const counts = `${reply.images} image(s), ${reply.videos} video(s)`;
       const partial = reply.failed && reply.failed.length
