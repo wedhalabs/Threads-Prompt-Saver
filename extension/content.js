@@ -1,10 +1,9 @@
 /*
  * content.js
  *
- * Adds the extension's buttons to Threads post pages: "Save post", which
- * extracts the post (see extract.js) and hands it to the background worker to
- * write to disk, and "Copy AI request", which prepares a message to paste into
- * whichever AI assistant you already pay for.
+ * Adds a "Save post" button to Threads post pages. On click it extracts the
+ * post (see extract.js) and hands it to the background worker, which writes
+ * the media and prompt text to disk.
  */
 
 (function () {
@@ -12,13 +11,7 @@
 
   const BTN_ID = "tps-save-btn";
   const SAVE_BTN = "tps-do-save";
-  const COPY_BTN = "tps-do-copy";
   const POST_URL_RE = /threads\.(?:com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+/;
-
-  /* Where the last save put its files, so the copy button can point at the
-   * folder to drag images from. A clipboard write can hold one item, so the
-   * images themselves can't ride along with the text. */
-  let lastSave = null;
 
   function onPostPage() {
     return POST_URL_RE.test(location.href);
@@ -43,13 +36,6 @@
       }
       #${BTN_ID} button:hover { background: #8aa2ff; }
       #${BTN_ID} button:disabled { opacity: .6; cursor: not-allowed; }
-      /* Secondary action: same shape, quieter, so "Save post" stays the
-         obvious one. */
-      #${COPY_BTN} {
-        background: #262b36 !important; color: #e7e9ee !important;
-        font-weight: 600 !important;
-      }
-      #${COPY_BTN}:hover { background: #333a49 !important; }
       #tps-status {
         max-width: 320px; padding: 9px 12px; border-radius: 10px;
         background: #171a21; color: #e7e9ee; border: 1px solid #2a2e38;
@@ -85,103 +71,6 @@
     }
   }
 
-  /* The message to paste into an AI assistant alongside the saved images.
-   * Asks for a usable prompt rather than a description, and says plainly that
-   * the result is a reconstruction — the author's own prompt isn't published
-   * anywhere on the page, so nothing can recover it. */
-  function buildRequest(post, imageCount) {
-    const caption = (post.parts || [])
-      .map((p) => (p.caption || "").trim())
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 1200);
-
-    const files = imageCount === 1 ? "image1" : `image1 … image${imageCount}`;
-
-    return [
-      `I'm attaching ${imageCount} image${imageCount === 1 ? "" : "s"} from a social media post (${files}).`,
-      "The author didn't publish the prompt they used, so I want to work out how these were made.",
-      "",
-      "For each image, write the image-generation prompt that would recreate something like it.",
-      "Cover: subject, composition and layout, typography and text placement, colour palette,",
-      "lighting, rendering style, and aspect ratio. Write it as a prompt to feed an image",
-      "generator — not as a description of what you see.",
-      "",
-      "If the images share a template or house style, describe that once as a reusable base",
-      "prompt, then give the per-image variations.",
-      "",
-      "Number each prompt to match the image order.",
-      "",
-      "--- context from the post ---",
-      `Source: ${post.url || location.href.split("?")[0]}`,
-      post.author ? `Author: @${post.author}` : null,
-      caption ? `\nCaption:\n${caption}` : null,
-    ]
-      // Only the optional lines above drop out; the empty strings are
-      // deliberate paragraph breaks.
-      .filter((line) => line !== null)
-      .join("\n");
-  }
-
-  async function copyText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (e) {
-      // Clipboard API can be refused when the page isn't focused; fall back to
-      // the old selection-based copy, which works from a click handler.
-      try {
-        const area = document.createElement("textarea");
-        area.value = text;
-        area.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
-        document.documentElement.appendChild(area);
-        area.select();
-        const ok = document.execCommand("copy");
-        area.remove();
-        return ok;
-      } catch (err) {
-        return false;
-      }
-    }
-  }
-
-  async function copyRequest() {
-    const btn = document.getElementById(COPY_BTN);
-    if (btn) btn.disabled = true;
-    try {
-      const result = window.__threadsPromptSaver.extractPost();
-      if (!result.ok) throw new Error(result.error);
-
-      const post = result.post;
-      const images = (post.media || []).filter((m) => m.kind === "image").length;
-      if (!images) throw new Error("This post has no images to analyse.");
-
-      const published = (post.snippet || "").trim();
-      const ok = await copyText(buildRequest(post, images));
-      if (!ok) throw new Error("Chrome wouldn't let the page write to the clipboard.");
-
-      // Only the text is on the clipboard — a clipboard write holds a single
-      // item, so the images have to be dragged in from the saved folder.
-      const saved = lastSave && lastSave.code === post.code ? lastSave : null;
-      const where = saved
-        ? `\n\nThen drag in the ${saved.images} image(s) from:\n${saved.folder}`
-        : "\n\nThen drag in the post's images — click Save post first if you haven't.";
-
-      setStatus(
-        (published
-          ? "Copied — though this post already publishes its own prompt, saved in prompt.txt, " +
-            "so you probably don't need this.\n\nPaste the text into your AI assistant."
-          : "Copied. Paste the text into your AI assistant.") + where,
-        "ok"
-      );
-    } catch (e) {
-      setStatus("Failed: " + String((e && e.message) || e), "err");
-    } finally {
-      const current = document.getElementById(COPY_BTN);
-      if (current) current.disabled = false;
-    }
-  }
-
   async function save() {
     const btn = document.getElementById(SAVE_BTN);
     btn.disabled = true;
@@ -212,8 +101,6 @@
         return;
       }
 
-      lastSave = { code: result.post.code, folder: reply.folder, images: reply.images };
-
       const counts = `${reply.images} image(s), ${reply.videos} video(s)`;
       const partial = reply.failed && reply.failed.length
         ? `\n${reply.failed.length} file(s) failed.`
@@ -243,10 +130,8 @@
     wrap.id = BTN_ID;
     wrap.innerHTML =
       `<button type="button" id="${SAVE_BTN}">Save post</button>` +
-      `<button type="button" id="${COPY_BTN}">Copy AI request</button>` +
       `<div id="tps-status"></div>`;
     wrap.querySelector(`#${SAVE_BTN}`).addEventListener("click", save);
-    wrap.querySelector(`#${COPY_BTN}`).addEventListener("click", copyRequest);
     document.documentElement.appendChild(wrap);
   }
 
