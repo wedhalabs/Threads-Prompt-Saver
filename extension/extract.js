@@ -26,6 +26,15 @@
   // apart; later replies to commenters are minutes or hours later.
   const CHAIN_WINDOW_SECONDS = 300;
 
+  // A later reply from the author is only worth keeping if it carries real
+  // content. Observed chit-chat replies run well under this; a prompt posted
+  // in the comments runs well over it.
+  const LATE_REPLY_MIN_CHARS = 280;
+
+  // Folder names are truncated at 80 characters anyway; cutting the title a
+  // little shorter keeps the cut on a word rather than mid-word.
+  const TITLE_MAX_CHARS = 70;
+
   function parsePostUrl(href) {
     const m = POST_URL_RE.exec(href || "");
     return m ? { author: m[1], code: m[2] } : null;
@@ -158,7 +167,15 @@
 
     // A whole paragraph on one line: keep just the opening sentence.
     const sentence = /^(.{10,80}?[.!?])(?:\s|$)/.exec(title);
-    if (sentence) title = sentence[1];
+    if (sentence) return sentence[1];
+
+    // No sentence break near the start — a long unbroken caption. Cut at a
+    // word boundary so the folder isn't named after half a paragraph.
+    if (title.length > TITLE_MAX_CHARS) {
+      const cut = title.slice(0, TITLE_MAX_CHARS);
+      const lastSpace = cut.lastIndexOf(" ");
+      title = (lastSpace > 20 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:—–-]+$/, "");
+    }
 
     return title;
   }
@@ -208,13 +225,29 @@
     }
     const mainTaken = main.taken_at || 0;
 
-    // Author's own chained posts (the 1/2, 2/2 continuation), de-duplicated,
-    // excluding much-later replies to other people.
+    /* Which of the author's other posts on this page belong to this one.
+     *
+     * The 1/2, 2/2 continuation is published seconds later, so a short time
+     * window catches it. But authors routinely drop the prompt into their own
+     * comments hours afterwards ("prompt in comments"), and that reply is worth
+     * just as much — so it's kept too when it actually carries something:
+     * a "Read more" block, or a reply long enough not to be small talk.
+     * Ordinary chatter ("thanks!", "yes I used omni") stays out. */
     const chain = new Map();
     for (const p of authorPosts) {
       if (p.code === target.code) continue;
+
       const taken = p.taken_at || 0;
-      if (!mainTaken || Math.abs(taken - mainTaken) > CHAIN_WINDOW_SECONDS) continue;
+      const inChainWindow =
+        mainTaken && Math.abs(taken - mainTaken) <= CHAIN_WINDOW_SECONDS;
+
+      let keep = inChainWindow;
+      if (!keep) {
+        const caption = ((p.caption || {}).text) || "";
+        keep = snippetsIn(p).length > 0 || caption.length >= LATE_REPLY_MIN_CHARS;
+      }
+      if (!keep) continue;
+
       const prev = chain.get(p.code);
       if (!prev || JSON.stringify(p).length > JSON.stringify(prev).length) chain.set(p.code, p);
     }
