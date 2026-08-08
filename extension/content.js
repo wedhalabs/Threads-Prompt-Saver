@@ -89,9 +89,12 @@
       const { media, title, code } = result.post;
       const imgs = media.filter((m) => m.kind === "image").length;
       const vids = media.filter((m) => m.kind === "video").length;
-      if (!media.length) throw new Error("No images or videos found on this post.");
 
-      setStatus(`Found ${imgs} image(s), ${vids} video(s). Downloading…`);
+      setStatus(
+        media.length
+          ? `Found ${imgs} image(s), ${vids} video(s). Downloading…`
+          : "No images or videos on this post. Saving prompt text…"
+      );
 
       const reply = await chrome.runtime.sendMessage({ type: "save", post: result.post });
       if (!stillHere()) return;
@@ -101,7 +104,9 @@
         return;
       }
 
-      const counts = `${reply.images} image(s), ${reply.videos} video(s)`;
+      const counts = reply.images || reply.videos
+        ? `${reply.images} image(s), ${reply.videos} video(s)`
+        : "prompt text";
       const partial = reply.failed && reply.failed.length
         ? `\n${reply.failed.length} file(s) failed.`
         : "";
