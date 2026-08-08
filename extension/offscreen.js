@@ -282,13 +282,24 @@ async function savePost(post) {
   }
 
   if (!fetched.length) {
-    return {
-      ok: false,
-      reason: "write-failed",
-      detail: failures.length
-        ? failures.slice(0, 2).join("; ")
-        : "nothing could be downloaded",
-    };
+    if ((post.media || []).length) {
+      // The post had media, but every download failed — a real failure.
+      return {
+        ok: false,
+        reason: "write-failed",
+        detail: failures.length
+          ? failures.slice(0, 2).join("; ")
+          : "nothing could be downloaded",
+      };
+    }
+    // No media on the post at all: fine, as long as there's prompt text to
+    // save instead. Otherwise there is truly nothing to write.
+    const hasText =
+      !!(post.snippet || "").trim() ||
+      (post.parts || []).some((p) => (p.caption || "").trim());
+    if (!hasText) {
+      return { ok: false, reason: "write-failed", detail: "nothing to save on this post" };
+    }
   }
 
   let folderName;
@@ -343,6 +354,7 @@ async function savePost(post) {
     }
   }
 
+  let promptWritten = true;
   try {
     await writeFile(
       dir,
@@ -350,13 +362,14 @@ async function savePost(post) {
       new Blob([promptText(post, reconstructed)], { type: "text/plain" })
     );
   } catch (e) {
+    promptWritten = false;
     failures.push("prompt.txt: " + ((e && e.message) || e));
   }
 
   images = written.filter((f) => f.kind === "image").length;
   videos = written.filter((f) => f.kind === "video").length;
   const saved = images + videos;
-  if (!saved) {
+  if (!saved && !promptWritten) {
     return { ok: false, reason: "write-failed", detail: failures.slice(0, 2).join("; ") };
   }
 
