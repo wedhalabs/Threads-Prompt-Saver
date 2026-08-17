@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Threads Poster — design mockup</title>
+<style>
+  :root {
+    /* Extended from the existing extension palette */
+    --bg:        #0c0f16;
+    --surface:   #12161f;
+    --surface-2: #171a21;
+    --raised:    #1c212c;
+    --border:    #242936;
+    --border-hi: #333a4a;
+    --text:      #e7e9ee;
+    --muted:     #8b93a7;
+    --faint:     #5c6377;
+    --accent:    #6c8cff;
+    --accent-hi: #8aa2ff;
+    --ok:        #7ee2af;
+    --ok-dim:    #2f7d55;
+    --warn:      #f0c26b;
+    --err:       #ff9b9b;
+    --radius:    10px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- shell ---------- */
+  .app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand { display: flex; align-items: center; gap: 9px; margin-right: 4px; }
+  .brand .dot {
+    width: 22px; height: 22px; border-radius: 7px; flex: none;
+    background: linear-gradient(140deg, var(--accent), #4a63c8);
+    box-shadow: 0 0 0 1px #ffffff14 inset;
+  }
+  .brand b { font-size: 14px; letter-spacing: -.01em; }
+  .brand span { color: var(--faint); font-size: 11px; display: block; margin-top: -2px; }
+
+  /* slim stat strip — replaces four giant vanity cards */
+  .stats { display: flex; gap: 0; margin-left: 6px; }
+  .stat {
+    padding: 0 14px; border-left: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .stat b { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--faint); font-size: 11.5px; }
+  .stat.ready b { color: var(--warn); }
+  .stat.posted b { color: var(--ok); }
+
+  .spacer { flex: 1; }
+
+  .search {
+    position: relative; width: 260px;
+  }
+  .search input {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 10px 7px 30px; font: inherit; font-size: 13px;
+  }
+  .search input:focus { outline: none; border-color: var(--accent); }
+  .search svg { position: absolute; left: 9px; top: 8px; opacity: .45; }
+
+  .btn {
+    background: var(--raised); color: var(--text); border: 1px solid var(--border-hi);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #0c0f16; border-color: transparent; }
+  .btn.primary:hover { background: var(--accent-hi); }
+  .btn.ghost { background: transparent; border-color: var(--border); color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); border-color: var(--border-hi); }
+
+  /* ---------- body: two panes ---------- */
+  .body { display: grid; grid-template-columns: 400px 1fr; min-height: 0; }
+
+  .list-pane {
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    min-height: 0; background: var(--surface);
+  }
+  .filters { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .chip {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600;
+  }
+  .chip[aria-pressed="true"] { background: #6c8cff1f; border-color: var(--accent); color: var(--accent-hi); }
+  .chip:hover { color: var(--text); }
+
+  .list { overflow-y: auto; flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+  /* thread card — shows the CHAIN, which is the whole point */
+  .card {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 11px 12px; text-align: left;
+    width: 100%; color: inherit; display: block; position: relative;
+  }
+  .card:hover { border-color: var(--border-hi); }
+  .card[aria-selected="true"] { border-color: var(--accent); background: #6c8cff12; }
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .topic {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--muted); background: var(--raised); border-radius: 5px; padding: 2px 7px;
+  }
+  .pill {
+    margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; border: 1px solid;
+  }
+  .pill.draft  { color: var(--faint); border-color: var(--border-hi); }
+  .pill.ready  { color: var(--warn);  border-color: #6b5628; background: #f0c26b14; }
+  .pill.posted { color: var(--ok);    border-color: var(--ok-dim); background: #7ee2af12; }
+
+  .card-title { font-weight: 600; font-size: 13.5px; line-height: 1.4; margin-bottom: 8px; }
+
+  /* the chain spine */
+  .chain { display: flex; flex-direction: column; gap: 0; margin-left: 3px; }
+  .link { display: flex; gap: 9px; align-items: flex-start; }
+  .rail { display: flex; flex-direction: column; align-items: center; flex: none; width: 9px; }
+  .node { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-top: 5px; flex: none; }
+  .link:first-child .node { background: var(--accent); }
+  .posted-chain .node { background: var(--ok-dim); }
+  .posted-chain .link:first-child .node { background: var(--ok); }
+  .thread-line { width: 1px; flex: 1; background: var(--border-hi); min-height: 10px; }
+  .link:last-child .thread-line { display: none; }
+  .link-text {
+    font-size: 12.5px; color: var(--muted); padding-bottom: 7px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  .more { font-size: 12px; color: var(--faint); padding-left: 18px; }
+
+  .card-foot {
+    display: flex; align-items: center; gap: 10px; margin-top: 8px;
+    font-size: 11.5px; color: var(--faint);
+  }
+  .card-foot a { color: var(--accent); text-decoration: none; }
+  .card-foot a:hover { text-decoration: underline; }
+
+  /* ---------- editor pane ---------- */
+  .editor { display: flex; flex-direction: column; min-height: 0; }
+  .editor-head {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .editor-head input.topic-in {
+    background: transparent; border: 1px solid transparent; color: var(--text);
+    font-size: 15px; font-weight: 700; padding: 5px 8px; border-radius: 7px; width: 260px;
+  }
+  .editor-head input.topic-in:hover { border-color: var(--border); }
+  .editor-head input.topic-in:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+
+  .segments { overflow-y: auto; flex: 1; padding: 18px 20px 40px; }
+
+  .seg { display: flex; gap: 12px; }
+  .seg-rail { display: flex; flex-direction: column; align-items: center; flex: none; width: 26px; }
+  .seg-badge {
+    width: 24px; height: 24px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-size: 11px; font-weight: 800;
+    background: var(--raised); color: var(--muted); border: 1px solid var(--border-hi);
+  }
+  .seg.parent .seg-badge { background: var(--accent); color: #0c0f16; border-color: transparent; }
+  .seg-line { width: 2px; flex: 1; background: var(--border); min-height: 18px; margin: 4px 0; border-radius: 2px; }
+  .seg:last-child .seg-line { display: none; }
+
+  .seg-body { flex: 1; padding-bottom: 16px; min-width: 0; }
+  .seg-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+  }
+  .seg-label .rm {
+    margin-left: auto; background: none; border: 0; color: var(--faint);
+    font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 5px; text-transform: none;
+    letter-spacing: 0;
+  }
+  .seg-label .rm:hover { color: var(--err); background: #ff9b9b12; }
+
+  textarea {
+    width: 100%; background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 13px; font: inherit; font-size: 14px; line-height: 1.55;
+    resize: vertical; min-height: 88px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); background: var(--surface-2); }
+
+  /* character budget — a meter, not a number nobody reads */
+  .meter-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+  .meter { height: 3px; border-radius: 2px; background: var(--border); flex: 1; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .15s; }
+  .meter.near i { background: var(--warn); }
+  .meter.over i { background: var(--err); }
+  .count { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
+  .count.near { color: var(--warn); }
+  .count.over { color: var(--err); font-weight: 700; }
+
+  .add-reply {
+    margin-left: 38px; margin-top: 2px;
+    background: transparent; border: 1px dashed var(--border-hi); color: var(--muted);
+    border-radius: 8px; padding: 8px 14px; font-size: 12.5px; font-weight: 600;
+  }
+  .add-reply:hover { border-color: var(--accent); color: var(--accent-hi); border-style: solid; }
+
+  .editor-foot {
+    border-top: 1px solid var(--border); padding: 12px 20px; display: flex;
+    align-items: center; gap: 10px; background: var(--surface);
+  }
+  .sched { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .sched input {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 6px 9px; font: inherit; font-size: 12.5px;
+  }
+  .sched input:focus { outline: none; border-color: var(--accent); }
+
+  /* ---------- publish session: a MODE, not a modal ---------- */
+  .session { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  body.publishing .segments, body.publishing .editor-foot, body.publishing .editor-head { display: none; }
+  body.publishing .session { display: flex; }
+
+  .session-head {
+    padding: 13px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; background: #6c8cff10;
+  }
+  .session-head b { font-size: 13.5px; }
+  .progress { display: flex; gap: 5px; margin-left: 4px; }
+  .pdot { width: 22px; height: 4px; border-radius: 2px; background: var(--border-hi); }
+  .pdot.done { background: var(--ok); }
+  .pdot.now  { background: var(--accent); }
+
+  .session-body { flex: 1; overflow-y: auto; padding: 28px 20px; display: flex; justify-content: center; }
+  .session-inner { width: 100%; max-width: 560px; }
+  .step-of { font-size: 12px; color: var(--faint); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 10px; }
+  .preview {
+    background: var(--surface); border: 1px solid var(--border-hi); border-radius: 12px;
+    padding: 16px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap;
+  }
+  .hint { color: var(--muted); font-size: 13px; margin: 16px 0 18px; display: flex; gap: 9px; align-items: flex-start; }
+  .hint .k {
+    background: var(--raised); border: 1px solid var(--border-hi); border-radius: 5px;
+    padding: 1px 6px; font-size: 11.5px; font-weight: 700; color: var(--text); white-space: nowrap;
+  }
+  .session-actions { display: flex; gap: 9px; align-items: center; }
+  .waiting { display: flex; align-items: center; gap: 8px; color: var(--warn); font-size: 12.5px; font-weight: 600; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); animation: p 1.4s ease-in-out infinite; }
+  @keyframes p { 0%,100% { opacity: .3; } 50% { opacity: 1; } }
+  .fallback { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); }
+  .fallback input {
+    width: 100%; margin-top: 7px; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); border-radius: 7px; padding: 7px 10px; font: inherit; font-size: 12.5px;
+  }
+  .fallback input:focus { outline: none; border-color: var(--accent); }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================= top bar ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <b>Threads Poster</b>
+        <span>Local library</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>3</b><span>threads</span></div>
+      <div class="stat"><b>13</b><span>segments</span></div>
+      <div class="stat ready"><b>1</b><span>ready</span></div>
+      <div class="stat posted"><b>2</b><span>posted</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>
+      </svg>
+      <input placeholder="Search topics and text…" />
+    </div>
+    <button class="btn ghost">Import</button>
+    <button class="btn ghost">Export</button>
+    <button class="btn primary">New thread</button>
+  </header>
+
+  <!-- ================= two panes ================= -->
+  <div class="body">
+
+    <!-- ---------- list ---------- -->
+    <section class="list-pane">
+      <div class="filters">
+        <button class="chip" aria-pressed="true">All</button>
+        <button class="chip">Draft</button>
+        <button class="chip">Ready</button>
+        <button class="chip">Posted</button>
+      </div>
+
+      <div class="list">
+
+        <button class="card" aria-selected="true">
+          <div class="card-top">
+            <span class="topic">Tips Bisnis</span>
+            <span class="pill ready">Ready</span>
+          </div>
+          <div class="card-title">5 rahasia closing tanpa perang harga</div>
+          <div class="chain">
+            <div class="link"><div class="rail"><div class="node"></div><div class="thread-line"></div></div>
+              <div class="link-text">Bangun personal branding dulu…</div></div>
+            <div class="link"><div class="rail"><div class="node"></div><div class="thread-line"></div></div>
+              <div class="link-text">Orang beli karena percaya…</div></div>
+            <div class="link"><div class="rail"><div class="node"></div></div>
+              <div class="link-text">Tunjukkan bukti, bukan janji.</div></div>
+          </div>
+          <div class="more">+2 more replies</div>
+          <div class="card-foot"><span>⏱ Tomorrow 09:00</span></div>
+        </button>
+
+        <button class="card">
+          <div class="card-top">
+            <span class="topic">Otomatisasi</span>
+            <span class="pill posted">Posted</span>
+          </div>
+          <div class="card-title">Capek posting manual tiap hari?</div>
+          <div class="chain posted-chain">
+            <div class="link"><div class="rail"><div class="node"></div><div class="thread-line"></div></div>
+              <div class="link-text">Gunakan ekstensi auto poster…</div></div>
+            <div class="link"><div class="rail"><div class="node"></div><div class="thread-line"></div></div>
+              <div class="link-text">Jadwalkan sekali, jalan terus.</div></div>
+            <div class="link"><div class="rail"><div class="node"></div></div>
+              <div class="link-text">Hemat 2 jam per hari.</div></div>
+          </div>
+          <div class="card-foot"><span>16 Aug</span><a href="#">View on Threads ↗</a></div>
+        </button>
+
+        <button class="card">
+          <div class="card-top">
+            <span class="topic">Produktivitas</span>
+            <span class="pill posted">Posted</span>
+          </div>
+          <div class="card-title">Cara tetap konsisten saat mood hancur</div>
+          <div class="chain posted-chain">
+            <div class="link"><div class="rail"><div class="node"></div><div class="thread-line"></div></div>
+              <div class="link-text">Kurangi target jadi 2 menit.</div></div>
+            <div class="link"><div class="rail"><div class="node"></div></div>
+              <div class="link-text">Konsistensi &gt; intensitas.</div></div>
+          </div>
+          <div class="card-foot"><span>15 Aug</span><a href="#">View on Threads ↗</a></div>
+        </button>
+
+        <button class="card">
+          <div class="card-top">
+            <span class="topic">Draft</span>
+            <span class="pill draft">Draft</span>
+          </div>
+          <div class="card-title">Belum ada judul…</div>
+          <div class="chain">
+            <div class="link"><div class="rail"><div class="node"></div></div>
+              <div class="link-text" style="color:var(--faint)">Empty</div></div>
+          </div>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ---------- editor ---------- -->
+    <section class="editor">
+
+      <div class="editor-head">
+        <input class="topic-in" value="Tips Bisnis" />
+        <span class="pill ready">Ready</span>
+        <div class="spacer"></div>
+        <button class="btn ghost">Duplicate</button>
+        <button class="btn ghost">Delete</button>
+      </div>
+
+      <div class="segments" id="segs">
+        <div class="seg parent">
+          <div class="seg-rail"><div class="seg-badge">1</div><div class="seg-line"></div></div>
+          <div class="seg-body">
+            <div class="seg-label">Parent post</div>
+            <textarea>🔥 5 rahasia closing bisnis online tanpa perang harga.
+
+Kalau kamu masih adu murah, kamu sedang membunuh margin sendiri. Ini yang saya pelajari setelah 3 tahun jualan.</textarea>
+            <div class="meter-row">
+              <div class="meter"><i style="width:34%"></i></div>
+              <div class="count">168 / 500</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg-rail"><div class="seg-badge">2</div><div class="seg-line"></div></div>
+          <div class="seg-body">
+            <div class="seg-label">Reply 1 <button class="rm">Remove</button></div>
+            <textarea>1️⃣ Bangun personal branding dulu. Orang membeli dari orang yang mereka percaya, bukan dari katalog termurah.</textarea>
+            <div class="meter-row">
+              <div class="meter"><i style="width:22%"></i></div>
+              <div class="count">110 / 500</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="seg">
+          <div class="seg-rail"><div class="seg-badge">3</div><div class="seg-line"></div></div>
+          <div class="seg-body">
+            <div class="seg-label">Reply 2 <button class="rm">Remove</button></div>
+            <textarea>2️⃣ Tunjukkan bukti, bukan janji. Screenshot hasil, testimoni asli, angka nyata. Satu bukti mengalahkan sepuluh klaim yang terdengar hebat tapi kosong isinya sama sekali.</textarea>
+            <div class="meter-row">
+              <div class="meter near"><i style="width:88%"></i></div>
+              <div class="count near">441 / 500</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="add-reply">+ Add reply</button>
+      </div>
+
+      <div class="editor-foot">
+        <div class="sched">
+          <span>Remind me</span>
+          <input type="datetime-local" value="2026-08-18T09:00" />
+        </div>
+        <div class="spacer"></div>
+        <button class="btn ghost">Save draft</button>
+        <button class="btn primary" onclick="document.body.classList.add('publishing')">Start publishing →</button>
+      </div>
+
+      <!-- ---------- publish session (mode, not modal) ---------- -->
+      <div class="session">
+        <div class="session-head">
+          <b>Publishing “Tips Bisnis”</b>
+          <div class="progress">
+            <div class="pdot done"></div>
+            <div class="pdot now"></div>
+            <div class="pdot"></div>
+            <div class="pdot"></div>
+            <div class="pdot"></div>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn ghost" onclick="document.body.classList.remove('publishing')">Pause session</button>
+        </div>
+
+        <div class="session-body">
+          <div class="session-inner">
+            <div class="step-of">Step 2 of 5 · Reply 1</div>
+            <div class="preview">1️⃣ Bangun personal branding dulu. Orang membeli dari orang yang mereka percaya, bukan dari katalog termurah.</div>
+
+            <div class="hint">
+              <span>↗</span>
+              <div>Copied to the Threads reply box in the open tab. Review it, then press <span class="k">Post</span> there — this extension never posts for you.</div>
+            </div>
+
+            <div class="session-actions">
+              <div class="waiting"><span class="pulse"></span> Waiting for you to post…</div>
+              <div class="spacer"></div>
+              <button class="btn ghost">Skip</button>
+              <button class="btn">I posted it — next →</button>
+            </div>
+
+            <div class="fallback">
+              Didn’t detect it? Paste the post URL and we’ll carry on.
+              <input placeholder="https://www.threads.com/@you/post/…" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </div>
+</div>
+
+<script>
+  // demo-only: live character meter
+  document.querySelectorAll('#segs textarea').forEach(function (ta) {
+    ta.addEventListener('input', function () {
+      var n = ta.value.length, pct = Math.min(100, n / 500 * 100);
+      var row = ta.parentElement.querySelector('.meter-row');
+      var meter = row.querySelector('.meter'), bar = row.querySelector('i'), c = row.querySelector('.count');
+      bar.style.width = pct + '%';
+      c.textContent = n + ' / 500';
+      meter.className = 'meter' + (n > 500 ? ' over' : n > 400 ? ' near' : '');
+      c.className = 'count' + (n > 500 ? ' over' : n > 400 ? ' near' : '');
+    });
+  });
+  document.querySelectorAll('.card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      document.querySelectorAll('.card').forEach(function (c) { c.removeAttribute('aria-selected'); });
+      card.setAttribute('aria-selected', 'true');
+    });
+  });
+  document.querySelectorAll('.chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      document.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+      chip.setAttribute('aria-pressed', 'true');
+    });
+  });
+</script>
+</body>
+</html>
