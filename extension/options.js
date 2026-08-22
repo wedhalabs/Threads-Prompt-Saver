@@ -285,7 +285,8 @@ function testImageDataUrl() {
   ctx.font = "bold 44px sans-serif";
   ctx.textBaseline = "middle";
   ctx.fillText(TEST_PHRASE, 24, 70);
-  return canvas.toDataURL("image/png");
+  // JPEG, matching what the saver sends, so a passing test means a passing save.
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 $("testApi").addEventListener("click", async () => {

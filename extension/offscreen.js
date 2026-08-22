@@ -71,8 +71,38 @@ function blobToDataUrl(blob) {
   });
 }
 
+/* Threads serves WebP, which plenty of endpoints quietly ignore rather than
+ * reject — the request succeeds and the model answers as though no image came,
+ * which is maddening to diagnose. Re-encode to JPEG, which everything reads,
+ * and cap the long edge: a 4000px carousel slide costs a fortune in tokens for
+ * detail no model needs to read the words off it. */
+const VISION_MAX_EDGE = 1568;
+
+async function toJpegDataUrl(blob) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(blob);
+  } catch (e) {
+    return blobToDataUrl(blob);   // not decodable here; let the endpoint try
+  }
+
+  const scale = Math.min(1, VISION_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+
+  const ctx = canvas.getContext("2d");
+  // JPEG has no alpha; without this, transparent areas turn black.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
 async function reconstructPrompt(blob, config) {
-  const dataUrl = await blobToDataUrl(blob);
+  const dataUrl = await toJpegDataUrl(blob);
   const res = await fetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
     method: "POST",
     headers: {
@@ -416,7 +446,10 @@ async function savePost(post) {
     await writeFile(
       dir,
       "prompt.txt",
-      new Blob([promptText(post, reconstructed, visionNote)], { type: "text/plain" })
+      // Leading BOM: prompts are full of typographic dashes and curly quotes,
+      // and Windows editors render UTF-8 as mojibake unless told what it is.
+      new Blob(["﻿" + promptText(post, reconstructed, visionNote)],
+               { type: "text/plain;charset=utf-8" })
     );
   } catch (e) {
     promptWritten = false;
