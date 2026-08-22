@@ -493,3 +493,31 @@ $("autoPick").addEventListener("click", async () => {
   apiSay(`No model worked. ${tried.slice(0, 3).join("; ")}` +
          (tried.length > 3 ? `; and ${tried.length - 3} more.` : ""), false);
 });
+
+/* Chrome ships a local model in recent versions, and it can read images where
+ * a gateway that only bridges web sessions cannot. Whether it exists, and
+ * whether this machine has downloaded it, varies — so ask it rather than
+ * assume, and say plainly what came back. Nothing here downloads anything. */
+async function reportOnDevice() {
+  const el = $("onDevice");
+  if (typeof LanguageModel === "undefined") {
+    el.textContent =
+      "On-device model: not available in this Chrome, so an endpoint above is required.";
+    return;
+  }
+  try {
+    const status = await LanguageModel.availability({ expectedInputs: [{ type: "image" }] });
+    const meaning = {
+      available: "ready to use — no key and no cost, nothing leaves this machine",
+      downloadable: "supported, but Chrome must download it first",
+      downloading: "downloading now",
+      unavailable: "present, but this machine can't run it",
+    }[status] || status;
+    el.textContent = `On-device model that reads images: ${status} — ${meaning}.`;
+  } catch (e) {
+    el.textContent =
+      "On-device model: present, but it does not accept images in this Chrome version.";
+  }
+}
+
+reportOnDevice();
