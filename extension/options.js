@@ -232,6 +232,22 @@ async function ensureOrigin(baseUrl) {
  * substrings because every gateway prefixes ids differently. */
 const GOOD_READERS = ["gemini", "sonnet", "opus", "gpt-5", "gpt-4o", "qwen", "glm"];
 
+/* Image editors take an image in, so they advertise image input and look like
+ * vision models in a /models listing — but they answer with a picture, not
+ * words, and are served by a different endpoint than chat/completions. Picking
+ * one produces a baffling failure, so keep them out of a chat model picker. */
+const IMAGE_MAKERS = [
+  "flux", "dall-e", "dalle", "gpt-image", "stable-diffusion", "sdxl", "imagen",
+  "midjourney", "ideogram", "recraft", "seedream", "seededit", "qwen-image",
+  "nano-banana", "kolors", "playground", "kling", "veo", "sora", "runway",
+  "luma", "pika", "wan-", "hailuo", "-video", "-tts", "-image",
+];
+
+function isImageMaker(id) {
+  const low = id.toLowerCase();
+  return IMAGE_MAKERS.some((name) => low.includes(name));
+}
+
 function readerRank(id) {
   const i = GOOD_READERS.findIndex((name) => id.toLowerCase().includes(name));
   return i < 0 ? GOOD_READERS.length : i;
@@ -254,7 +270,7 @@ function renderModels(models) {
   const select = $("apiModelSelect");
 
   const usable = models
-    .filter((m) => showAll || m.vision !== false)
+    .filter((m) => showAll || (m.vision !== false && !isImageMaker(m.id)))
     .filter((m) => !query || m.id.toLowerCase().includes(query));
 
   // A short, opinionated list first, so the common case is one click.
