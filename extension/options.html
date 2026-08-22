@@ -102,7 +102,11 @@
     <input type="text" id="apiModel" placeholder="anthropic/claude-sonnet-4.5" style="flex:1;" />
     <button id="fetchModels" class="ghost" type="button">Fetch models</button>
   </div>
-  <select id="apiModelSelect" style="display:none;margin-top:8px;width:100%;"></select>
+  <div id="modelFilterWrap" style="display:none;margin-top:8px;">
+    <input type="search" id="modelFilter" placeholder="Filter — try gemini, sonnet, qwen…"
+           style="width:100%;" />
+  </div>
+  <select id="apiModelSelect" style="display:none;margin-top:6px;width:100%;"></select>
   <label id="showAllWrap" style="display:none;margin-top:6px;font-size:12.5px;">
     <input type="checkbox" id="showAllModels" /> Show models that can't read images
   </label>

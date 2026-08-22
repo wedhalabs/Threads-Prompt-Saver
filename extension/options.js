@@ -223,17 +223,69 @@ async function ensureOrigin(baseUrl) {
   return false;
 }
 
+/* Endpoints that front many providers can list hundreds of models, and a
+ * hundreds-long dropdown is no more usable than the free-text box it replaced.
+ * So: hide the ones that can't read images, put the strong readers on top,
+ * group the rest by provider, and let a filter box do the real work. */
+
+/* Families that reliably read text out of a picture, best first. Matched as
+ * substrings because every gateway prefixes ids differently. */
+const GOOD_READERS = ["gemini", "sonnet", "opus", "gpt-5", "gpt-4o", "qwen", "glm"];
+
+function readerRank(id) {
+  const i = GOOD_READERS.findIndex((name) => id.toLowerCase().includes(name));
+  return i < 0 ? GOOD_READERS.length : i;
+}
+
+function providerOf(id) {
+  const slash = id.indexOf("/");
+  return slash > 0 ? id.slice(0, slash) : "other";
+}
+
+function optionFor(m) {
+  const mark = m.vision === true ? " ✔" : m.vision === null ? " (untested)" : " ✖ text only";
+  const label = String(m.id + mark).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `<option value="${m.id}">${label}</option>`;
+}
+
 function renderModels(models) {
   const showAll = $("showAllModels").checked;
+  const query = $("modelFilter").value.trim().toLowerCase();
   const select = $("apiModelSelect");
-  const usable = showAll ? models : models.filter((m) => m.vision !== false);
 
-  select.innerHTML = `<option value="">— pick a model (${usable.length}) —</option>` +
-    usable.map((m) => {
-      const mark = m.vision === true ? " ✔ images" : m.vision === null ? " (untested)" : " ✖ text only";
-      return `<option value="${m.id}">${m.id}${mark}</option>`;
-    }).join("");
+  const usable = models
+    .filter((m) => showAll || m.vision !== false)
+    .filter((m) => !query || m.id.toLowerCase().includes(query));
+
+  // A short, opinionated list first, so the common case is one click.
+  const suggested = usable
+    .filter((m) => m.vision === true && readerRank(m.id) < GOOD_READERS.length)
+    .sort((a, b) => readerRank(a.id) - readerRank(b.id) || a.id.localeCompare(b.id))
+    .slice(0, 8);
+
+  const suggestedIds = new Set(suggested.map((m) => m.id));
+  const byProvider = new Map();
+  usable.forEach((m) => {
+    if (suggestedIds.has(m.id)) return;
+    const key = providerOf(m.id);
+    if (!byProvider.has(key)) byProvider.set(key, []);
+    byProvider.get(key).push(m);
+  });
+
+  let html = `<option value="">— ${usable.length} model(s) —</option>`;
+  if (suggested.length) {
+    html += `<optgroup label="Good at reading text in images">` +
+      suggested.map(optionFor).join("") + `</optgroup>`;
+  }
+  Array.from(byProvider.keys()).sort().forEach((key) => {
+    html += `<optgroup label="${key} (${byProvider.get(key).length})">` +
+      byProvider.get(key).map(optionFor).join("") + `</optgroup>`;
+  });
+
+  select.innerHTML = html;
+  select.size = usable.length > 12 ? 12 : 0;
   select.style.display = "";
+  $("modelFilterWrap").style.display = "";
   $("showAllWrap").style.display = "";
 }
 
@@ -266,6 +318,7 @@ $("fetchModels").addEventListener("click", async () => {
 });
 
 $("showAllModels").addEventListener("change", () => renderModels(fetchedModels));
+$("modelFilter").addEventListener("input", () => renderModels(fetchedModels));
 
 $("apiModelSelect").addEventListener("change", (e) => {
   if (e.target.value) $("apiModel").value = e.target.value;
