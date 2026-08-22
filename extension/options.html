@@ -32,6 +32,20 @@
     border: 1px solid rgba(128,128,128,.55); font-weight: 600; }
   #status { margin-left: 10px; font-size: 13px; opacity: 0; transition: opacity .15s; }
   #status.show { opacity: 1; }
+
+  /* A plain list rather than a <select>: a dropdown collapses on every click,
+     which makes comparing models across hundreds of rows painful. */
+  #apiModelList { display: none; margin-top: 6px; max-height: 240px; overflow-y: auto;
+    border: 1px solid rgba(128,128,128,.5); border-radius: 8px; }
+  #apiModelList .grp { position: sticky; top: 0; padding: 6px 11px; font-size: 11px;
+    font-weight: 700; letter-spacing: .04em; text-transform: uppercase; opacity: .65;
+    background: Canvas; border-bottom: 1px solid rgba(128,128,128,.25); }
+  #apiModelList button.m { display: block; width: 100%; text-align: left; padding: 6px 14px;
+    background: transparent; color: inherit; border: 0; border-radius: 0; cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 400; }
+  #apiModelList button.m:hover { background: rgba(108,140,255,.18); }
+  #apiModelList button.m[aria-selected="true"] { background: rgba(108,140,255,.32); font-weight: 700; }
+  #apiModelList .none { padding: 12px 14px; font-size: 13px; opacity: .7; }
 </style>
 
 <h1>Threads Prompt Saver</h1>
@@ -106,7 +120,7 @@
     <input type="search" id="modelFilter" placeholder="Filter — try gemini, sonnet, qwen…"
            style="width:100%;" />
   </div>
-  <select id="apiModelSelect" style="display:none;margin-top:6px;width:100%;"></select>
+  <div id="apiModelList"></div>
   <label id="showAllWrap" style="display:none;margin-top:6px;font-size:12.5px;">
     <input type="checkbox" id="showAllModels" /> Show every model, including text-only ones and image generators
   </label>

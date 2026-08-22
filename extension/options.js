@@ -258,16 +258,22 @@ function providerOf(id) {
   return slash > 0 ? id.slice(0, slash) : "other";
 }
 
-function optionFor(m) {
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+function rowFor(m, chosen) {
   const mark = m.vision === true ? " ✔" : m.vision === null ? " (untested)" : " ✖ text only";
-  const label = String(m.id + mark).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  return `<option value="${m.id}">${label}</option>`;
+  return `<button type="button" class="m" data-model="${escapeHtml(m.id)}"` +
+         `${m.id === chosen ? ' aria-selected="true"' : ""}>` +
+         `${escapeHtml(m.id + mark)}</button>`;
 }
 
 function renderModels(models) {
   const showAll = $("showAllModels").checked;
   const query = $("modelFilter").value.trim().toLowerCase();
-  const select = $("apiModelSelect");
+  const list = $("apiModelList");
+  const chosen = $("apiModel").value.trim();
 
   const usable = models
     .filter((m) => showAll || (m.vision !== false && !isImageMaker(m.id)))
@@ -288,19 +294,30 @@ function renderModels(models) {
     byProvider.get(key).push(m);
   });
 
-  let html = `<option value="">— ${usable.length} model(s) —</option>`;
+  let html = "";
   if (suggested.length) {
-    html += `<optgroup label="Good at reading text in images">` +
-      suggested.map(optionFor).join("") + `</optgroup>`;
+    html += `<div class="grp">Good at reading text in images</div>` +
+      suggested.map((m) => rowFor(m, chosen)).join("");
   }
   Array.from(byProvider.keys()).sort().forEach((key) => {
-    html += `<optgroup label="${key} (${byProvider.get(key).length})">` +
-      byProvider.get(key).map(optionFor).join("") + `</optgroup>`;
+    html += `<div class="grp">${escapeHtml(key)} (${byProvider.get(key).length})</div>` +
+      byProvider.get(key).map((m) => rowFor(m, chosen)).join("");
+  });
+  if (!usable.length) html = `<div class="none">Nothing matches that filter.</div>`;
+
+  list.innerHTML = html;
+  list.style.display = "";
+  // Selecting must not collapse the list — comparing models means clicking
+  // several in a row, and a <select> closed after every one of them.
+  list.querySelectorAll("button.m").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      $("apiModel").value = btn.dataset.model;
+      list.querySelectorAll("button.m").forEach((b) => b.removeAttribute("aria-selected"));
+      btn.setAttribute("aria-selected", "true");
+      apiSay(`Picked ${btn.dataset.model}. Press Test vision, or Save.`);
+    });
   });
 
-  select.innerHTML = html;
-  select.size = usable.length > 12 ? 12 : 0;
-  select.style.display = "";
   $("modelFilterWrap").style.display = "";
   $("showAllWrap").style.display = "";
 }
@@ -335,10 +352,6 @@ $("fetchModels").addEventListener("click", async () => {
 
 $("showAllModels").addEventListener("change", () => renderModels(fetchedModels));
 $("modelFilter").addEventListener("input", () => renderModels(fetchedModels));
-
-$("apiModelSelect").addEventListener("change", (e) => {
-  if (e.target.value) $("apiModel").value = e.target.value;
-});
 
 /* Draw the test image here rather than shipping one: it keeps the extension
  * asset-free and proves the exact path the saver uses — including whether the
