@@ -51,3 +51,65 @@ test("reports a shape it cannot read", () => {
 test("reports an endpoint that returned no models", () => {
   assert.match(parseModelList({ data: [] }).error, /no models/i);
 });
+
+import { parseVisionReply } from "../extension/vision-util.js";
+
+test("reads a clean JSON reply", () => {
+  const out = parseVisionReply('{"kind":"transcribed","text":"Transform a sketch."}');
+  assert.deepEqual(out, { kind: "transcribed", text: "Transform a sketch." });
+});
+
+test("reads JSON wrapped in a code fence", () => {
+  const raw = '```json\n{"kind":"transcribed","text":"Hello"}\n```';
+  assert.deepEqual(parseVisionReply(raw), { kind: "transcribed", text: "Hello" });
+});
+
+test("reads JSON buried in prose", () => {
+  const raw = 'Sure! {"kind":"reconstructed","text":"A brown slide."} Hope that helps.';
+  assert.deepEqual(parseVisionReply(raw), { kind: "reconstructed", text: "A brown slide." });
+});
+
+const NL = String.fromCharCode(10);
+const TWO_LINES = "first line" + NL + "second line";
+
+test("keeps newlines inside the transcribed text", () => {
+  // JSON.stringify escapes the newline properly, as a well-behaved model would.
+  const raw = JSON.stringify({ kind: "transcribed", text: TWO_LINES });
+  assert.equal(parseVisionReply(raw).text, TWO_LINES);
+});
+
+test("salvages JSON broken by a raw newline in the text", () => {
+  // A model transcribing a multi-line prompt often emits a real newline inside
+  // the string instead, which is invalid JSON. The words must still survive.
+  const raw = '{"kind":"transcribed","text":"' + TWO_LINES + '"}';
+  const out = parseVisionReply(raw);
+  assert.equal(out.kind, "transcribed", "the words are still verbatim");
+  assert.equal(out.text, TWO_LINES);
+});
+
+test("treats bare text as reconstructed, never as verbatim", () => {
+  const out = parseVisionReply("A photorealistic render of a house.");
+  assert.deepEqual(out, { kind: "reconstructed", text: "A photorealistic render of a house." });
+});
+
+test("falls back to reconstructed when kind is unrecognised", () => {
+  const out = parseVisionReply('{"kind":"ocr","text":"Some words"}');
+  assert.equal(out.kind, "reconstructed", "an unknown label must not claim verbatim");
+  assert.equal(out.text, "Some words");
+});
+
+test("falls back to reconstructed when text is missing", () => {
+  const out = parseVisionReply('{"kind":"transcribed"}');
+  assert.equal(out.kind, "reconstructed");
+});
+
+test("handles an empty reply", () => {
+  assert.deepEqual(parseVisionReply(""), { kind: "reconstructed", text: "" });
+  assert.deepEqual(parseVisionReply(null), { kind: "reconstructed", text: "" });
+});
+
+test("treats the model reporting no prompt as reconstructed-empty", () => {
+  const out = parseVisionReply('{"kind":"transcribed","text":""}');
+  assert.equal(out.kind, "reconstructed", "empty transcription is not a transcription");
+  assert.equal(out.text, "");
+});

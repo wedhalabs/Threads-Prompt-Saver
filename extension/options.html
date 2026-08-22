@@ -72,13 +72,19 @@
 </fieldset>
 
 <fieldset style="margin-top:18px;">
-  <legend>Reconstruct missing prompts <span style="font-weight:400;opacity:.7;">(optional)</span></legend>
+  <legend>Read prompts from images <span style="font-weight:400;opacity:.7;">(optional)</span></legend>
   <div class="hint" style="margin-top:0;">
-    When a post publishes its prompt, that prompt is saved exactly as written.
-    When it doesn't, the author's real prompt isn't on the page and can't be
-    recovered — but a vision model can look at each saved image and write a
-    prompt that would produce something similar. Saved under
-    <b>RECONSTRUCTED PROMPTS</b>, clearly marked as a guess.
+    When a post publishes its prompt as text, that text is saved exactly as
+    written. When it doesn't, a vision model looks at each saved image and does
+    one of two things.
+    <br /><br />
+    If the prompt is <b>printed on the image</b> — the carousel slides that share
+    a prompt as a picture — it is copied out word for word, under
+    <b>PROMPTS READ FROM THE IMAGES</b>. That is the author's own prompt.
+    <br /><br />
+    If nothing is written on the image, the model describes a prompt that would
+    produce something similar, under <b>RECONSTRUCTED PROMPTS</b>, clearly marked
+    as a guess. The two never share a section.
     <br /><br />
     Leave blank and nothing is sent anywhere and nothing costs money. Filled in,
     every image of a promptless post costs one API call — an 11-image carousel

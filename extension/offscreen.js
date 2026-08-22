@@ -35,19 +35,32 @@ function extensionFor(kind, url, contentType) {
   return kind === "video" ? "mp4" : "jpg";
 }
 
-/* ---- optional prompt reconstruction ------------------------------------- *
- * Some posts publish the prompt behind them; those are captured verbatim. For
- * the ones that don't, the author's real prompt is simply not on the page and
- * cannot be recovered — so if the user has configured a vision model, each
- * image is described back into a prompt that would produce something similar.
- * That is a reconstruction, and prompt.txt says so.
+/* ---- optional prompt reading -------------------------------------------- *
+ * Some posts publish the prompt behind them; those are captured verbatim.
+ * For the rest, a configured vision model looks at each saved image and does
+ * one of two very different jobs:
+ *
+ *   transcribed  — the prompt is printed on the image, as on the carousel
+ *                  slides that share a prompt as a picture. Those words are
+ *                  the author's own and are copied out exactly.
+ *   reconstructed — nothing is written on the image, so the model describes a
+ *                  prompt that would produce something similar. A guess.
+ *
+ * prompt.txt keeps them in separate sections. Blurring the two would stamp the
+ * author's real words as a guess, or worse, dress a guess up as their words.
  * ------------------------------------------------------------------------- */
 
-const RECONSTRUCT_SYSTEM =
-  "You look at a single image and write ONE prompt (4-7 sentences) that could be fed to an " +
-  "image generator to produce a similar image: subject, composition, typography, colour " +
-  "palette, lighting and overall style. Output only the prompt text — no preamble, no " +
-  "markdown, no quotes.";
+const VISION_SYSTEM =
+  "You are given a single image. Decide which case it is.\n" +
+  "1. If prompt text is WRITTEN ON the image — a slide, screenshot or infographic " +
+  "showing a prompt — transcribe that text EXACTLY as written. Preserve wording, " +
+  "line breaks and punctuation. Do not summarise, translate, correct or improve it. " +
+  "Ignore surrounding labels such as a heading that only reads \"Prompt:\".\n" +
+  "2. Otherwise, write ONE prompt (4-7 sentences) that could be fed to an image " +
+  "generator to produce a similar image: subject, composition, typography, colour " +
+  "palette, lighting and overall style.\n" +
+  "Reply with JSON only, no markdown fence: " +
+  '{"kind":"transcribed"|"reconstructed","text":"..."}';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -70,11 +83,11 @@ async function reconstructPrompt(blob, config) {
       model: config.model,
       max_tokens: 2000,
       messages: [
-        { role: "system", content: RECONSTRUCT_SYSTEM },
+        { role: "system", content: VISION_SYSTEM },
         {
           role: "user",
           content: [
-            { type: "text", text: "Write the image-generation prompt for this image." },
+            { type: "text", text: "Transcribe the prompt written on this image, or write one for it." },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
@@ -86,20 +99,30 @@ async function reconstructPrompt(blob, config) {
   const text = data && data.choices && data.choices[0] && data.choices[0].message
     ? data.choices[0].message.content
     : "";
-  return (text || "").trim();
+
+  const { parseVisionReply } = await import("./vision-util.js");
+  return parseVisionReply(text);
 }
 
-async function reconstructAll(files, config) {
+async function readAllPrompts(files, config) {
   const out = [];
   for (const file of files) {
     if (file.kind !== "image") continue;
     try {
-      const text = await reconstructPrompt(file.blob, config);
+      const reply = await reconstructPrompt(file.blob, config);
       // Record an empty answer rather than dropping it: a silent skip is
       // indistinguishable from the feature being switched off.
-      out.push({ name: file.name, text: text || "[the model returned nothing]" });
+      out.push({
+        name: file.name,
+        kind: reply.kind,
+        text: reply.text || "[the model returned nothing]",
+      });
     } catch (e) {
-      out.push({ name: file.name, text: `[could not reconstruct: ${(e && e.message) || e}]` });
+      out.push({
+        name: file.name,
+        kind: "reconstructed",
+        text: `[could not read: ${(e && e.message) || e}]`,
+      });
     }
   }
   return out;
@@ -126,17 +149,38 @@ function promptText(post, reconstructed, visionNote) {
   const snippet = (post.snippet || "").trim();
   if (snippet) lines.push("=".repeat(70), "MASTER PROMPT", "=".repeat(70), snippet, "");
 
-  if (reconstructed && reconstructed.length) {
+  // Two sections, never one. Text read off an image is the author's own and
+  // must not carry the guess disclaimer; a guess must never lose it.
+  const found = reconstructed || [];
+  const transcribed = found.filter((item) => item.kind === "transcribed");
+  const guessed = found.filter((item) => item.kind !== "transcribed");
+
+  if (transcribed.length) {
+    lines.push(
+      "=".repeat(70),
+      "PROMPTS READ FROM THE IMAGES",
+      "=".repeat(70),
+      "This post published its prompt as a picture rather than as text. A vision",
+      "model transcribed the words printed on each image, so this IS the author's",
+      "own prompt — check it against the image if the wording looks odd.",
+      ""
+    );
+    for (const item of transcribed) {
+      lines.push("-".repeat(70), item.name, "-".repeat(70), item.text, "");
+    }
+  }
+
+  if (guessed.length) {
     lines.push(
       "=".repeat(70),
       "RECONSTRUCTED PROMPTS",
       "=".repeat(70),
-      "The author did not publish a prompt for this post. These were written by",
-      "a vision model looking at each saved image — they describe how to produce",
-      "a similar image, and are NOT the prompt the author actually used.",
+      "No prompt was written on these images, so a vision model described one",
+      "that would produce something similar. They are a guess, and are NOT the",
+      "prompt the author actually used.",
       ""
     );
-    for (const item of reconstructed) {
+    for (const item of guessed) {
       lines.push("-".repeat(70), item.name, "-".repeat(70), item.text, "");
     }
   }
@@ -357,7 +401,7 @@ async function savePost(post) {
       /* no config stored */
     }
     if (apiConfig && apiConfig.baseUrl && apiConfig.apiKey && apiConfig.model) {
-      reconstructed = await reconstructAll(written, apiConfig);
+      reconstructed = await readAllPrompts(written, apiConfig);
     } else if (written.some((f) => f.kind === "image")) {
       // Without this line a promptless post looks identical whether the
       // feature is off or broken, which is a miserable thing to debug.

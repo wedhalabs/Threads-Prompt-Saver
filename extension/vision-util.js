@@ -39,3 +39,57 @@ export function parseModelList(json) {
   if (!models.length) return { models: [], error: "That endpoint returned no models" };
   return { models, error: null };
 }
+
+const KINDS = ["transcribed", "reconstructed"];
+
+function stripFence(text) {
+  return text.replace(/^\s*```[a-z]*\s*/i, "").replace(/\s*```\s*$/, "");
+}
+
+/* Models add preambles despite being told not to, so take the outermost
+ * braces rather than insisting the whole reply is JSON. */
+function firstJsonObject(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+/* A model transcribing a multi-line prompt tends to put real newlines inside
+ * the JSON string, which is not legal JSON and makes JSON.parse give up. The
+ * transcription is the whole point, so pull the fields out by hand instead of
+ * throwing the words away. */
+function salvage(text) {
+  const body = text.match(/"text"\s*:\s*"([\s\S]*?)"\s*\}\s*$/);
+  if (!body) return null;
+
+  const kind = text.match(/"kind"\s*:\s*"([A-Za-z]+)"/);
+  const unescaped = body[1]
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+
+  return { kind: kind ? kind[1] : undefined, text: unescaped };
+}
+
+/* Anything uncertain becomes "reconstructed". Mislabelling a guess as the
+ * author's own words is the harmful direction; the reverse is only modest. */
+export function parseVisionReply(raw) {
+  const text = String(raw === null || raw === undefined ? "" : raw).trim();
+  if (!text) return { kind: "reconstructed", text: "" };
+
+  const stripped = stripFence(text).trim();
+  const parsed = firstJsonObject(stripped) || salvage(stripped);
+
+  if (parsed && typeof parsed.text === "string") {
+    const claimed = KINDS.includes(parsed.kind) ? parsed.kind : "reconstructed";
+    // An empty transcription is not a transcription.
+    return { kind: parsed.text.trim() ? claimed : "reconstructed", text: parsed.text };
+  }
+  return { kind: "reconstructed", text: stripped };
+}
