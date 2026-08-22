@@ -17,7 +17,9 @@
     "https://*.cdninstagram.com/*"
   ],
   "optional_host_permissions": [
-    "https://*/*"
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
   "options_ui": {
     "page": "options.html",

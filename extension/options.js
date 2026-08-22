@@ -182,3 +182,162 @@ if (PARAMS.has("welcome")) $("welcome").classList.add("show");
 if (PARAMS.has("setup")) $("setup").classList.add("show");
 refreshFolder();
 refreshApi();
+
+/* ---- picking and proving the vision model -------------------------------- *
+ * Typing a model id by hand gave no feedback until a post was saved and the
+ * txt file inspected — a wrong id or an endpoint that can't take images looked
+ * exactly like a working setup. So the list is fetched, and a test button
+ * sends a real image through the same request shape the saver uses.
+ * ------------------------------------------------------------------------- */
+
+const TEST_PHRASE = "VISION-OK-7431";
+
+/* Sticky status: a test result is worth reading, unlike a "Saved." flash. */
+function apiSay(text, ok) {
+  const el = $("apiStatus");
+  el.textContent = text;
+  el.style.color = ok === false ? "#c0392b" : ok === true ? "#1e8449" : "";
+}
+
+async function currentKey() {
+  const typed = $("apiKey").value.trim();
+  if (typed) return typed;
+  try {
+    return (await tpsGetApiConfig()).apiKey || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+/* Ask for this endpoint only, on this click. A local OmniRoute is http, which
+ * is why the manifest also offers localhost as an optional origin. */
+async function ensureOrigin(baseUrl) {
+  const origin = originOf(baseUrl);
+  if (!origin) { apiSay("That URL doesn't look right.", false); return false; }
+  try {
+    if (await chrome.permissions.request({ origins: [origin] })) return true;
+  } catch (e) {
+    /* falls through to the message below */
+  }
+  apiSay(`Chrome denied access to ${origin}.`, false);
+  return false;
+}
+
+function renderModels(models) {
+  const showAll = $("showAllModels").checked;
+  const select = $("apiModelSelect");
+  const usable = showAll ? models : models.filter((m) => m.vision !== false);
+
+  select.innerHTML = `<option value="">— pick a model (${usable.length}) —</option>` +
+    usable.map((m) => {
+      const mark = m.vision === true ? " ✔ images" : m.vision === null ? " (untested)" : " ✖ text only";
+      return `<option value="${m.id}">${m.id}${mark}</option>`;
+    }).join("");
+  select.style.display = "";
+  $("showAllWrap").style.display = "";
+}
+
+let fetchedModels = [];
+
+$("fetchModels").addEventListener("click", async () => {
+  const baseUrl = $("apiBase").value.trim();
+  const apiKey = await currentKey();
+  if (!baseUrl || !apiKey) { apiSay("Need the URL and key first.", false); return; }
+  if (!(await ensureOrigin(baseUrl))) return;
+
+  apiSay("Fetching models…");
+  try {
+    const res = await fetch(baseUrl.replace(/\/+$/, "") + "/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) { apiSay(`Endpoint answered HTTP ${res.status}.`, false); return; }
+
+    const { parseModelList } = await import("./vision-util.js");
+    const { models, error } = parseModelList(await res.json());
+    if (error) { apiSay(error, false); return; }
+
+    fetchedModels = models;
+    renderModels(models);
+    const seeing = models.filter((m) => m.vision === true).length;
+    apiSay(`Found ${models.length} model(s)` + (seeing ? `, ${seeing} that read images.` : "."), true);
+  } catch (e) {
+    apiSay("Could not reach that endpoint: " + ((e && e.message) || e), false);
+  }
+});
+
+$("showAllModels").addEventListener("change", () => renderModels(fetchedModels));
+
+$("apiModelSelect").addEventListener("change", (e) => {
+  if (e.target.value) $("apiModel").value = e.target.value;
+});
+
+/* Draw the test image here rather than shipping one: it keeps the extension
+ * asset-free and proves the exact path the saver uses — including whether the
+ * endpoint accepts a base64 data URL, which many bridges do not. */
+function testImageDataUrl() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 420;
+  canvas.height = 140;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000000";
+  ctx.font = "bold 44px sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.fillText(TEST_PHRASE, 24, 70);
+  return canvas.toDataURL("image/png");
+}
+
+$("testApi").addEventListener("click", async () => {
+  const baseUrl = $("apiBase").value.trim();
+  const model = $("apiModel").value.trim();
+  const apiKey = await currentKey();
+  if (!baseUrl || !apiKey || !model) { apiSay("Need all three: URL, key and model.", false); return; }
+  if (!(await ensureOrigin(baseUrl))) return;
+
+  apiSay(`Testing ${model}…`);
+  try {
+    const res = await fetch(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        max_tokens: 100,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: "Reply with only the text written in this image." },
+            { type: "image_url", image_url: { url: testImageDataUrl() } },
+          ],
+        }],
+      }),
+    });
+
+    const body = await res.text();
+    if (!res.ok) {
+      apiSay(`HTTP ${res.status}. ${body.slice(0, 200)}`, false);
+      return;
+    }
+
+    let reply = "";
+    try {
+      const data = JSON.parse(body);
+      reply = (data.choices && data.choices[0] && data.choices[0].message
+        && data.choices[0].message.content) || "";
+    } catch (e) {
+      apiSay("Endpoint returned something that isn't JSON.", false);
+      return;
+    }
+
+    if (String(reply).toUpperCase().includes(TEST_PHRASE)) {
+      apiSay(`${model} read the test image. Vision works.`, true);
+    } else if (!String(reply).trim()) {
+      apiSay(`${model} answered with nothing — it likely ignored the image.`, false);
+    } else {
+      apiSay(`${model} saw the image but read "${String(reply).trim().slice(0, 60)}" ` +
+             `instead of ${TEST_PHRASE}. Text may be too small for it, or it ignored the image.`, false);
+    }
+  } catch (e) {
+    apiSay("Request failed: " + ((e && e.message) || e), false);
+  }
+});

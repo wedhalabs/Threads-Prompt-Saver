@@ -68,7 +68,7 @@ async function reconstructPrompt(blob, config) {
     },
     body: JSON.stringify({
       model: config.model,
-      max_tokens: 500,
+      max_tokens: 2000,
       messages: [
         { role: "system", content: RECONSTRUCT_SYSTEM },
         {
@@ -95,7 +95,9 @@ async function reconstructAll(files, config) {
     if (file.kind !== "image") continue;
     try {
       const text = await reconstructPrompt(file.blob, config);
-      if (text) out.push({ name: file.name, text });
+      // Record an empty answer rather than dropping it: a silent skip is
+      // indistinguishable from the feature being switched off.
+      out.push({ name: file.name, text: text || "[the model returned nothing]" });
     } catch (e) {
       out.push({ name: file.name, text: `[could not reconstruct: ${(e && e.message) || e}]` });
     }
@@ -103,7 +105,7 @@ async function reconstructAll(files, config) {
   return out;
 }
 
-function promptText(post, reconstructed) {
+function promptText(post, reconstructed, visionNote) {
   const lines = [
     "PROMPT",
     `Source: ${post.url || ""}`,
@@ -137,6 +139,10 @@ function promptText(post, reconstructed) {
     for (const item of reconstructed) {
       lines.push("-".repeat(70), item.name, "-".repeat(70), item.text, "");
     }
+  }
+
+  if (visionNote) {
+    lines.push("=".repeat(70), "NOTE", "=".repeat(70), visionNote, "");
   }
 
   if (!snippet && !parts.length && !(reconstructed && reconstructed.length)) {
@@ -342,6 +348,7 @@ async function savePost(post) {
   // Only when the post published no prompt of its own — there is nothing to
   // reconstruct otherwise, and every call costs the user money.
   let reconstructed = [];
+  let visionNote = "";
   if (!(post.snippet || "").trim()) {
     let apiConfig = null;
     try {
@@ -351,6 +358,12 @@ async function savePost(post) {
     }
     if (apiConfig && apiConfig.baseUrl && apiConfig.apiKey && apiConfig.model) {
       reconstructed = await reconstructAll(written, apiConfig);
+    } else if (written.some((f) => f.kind === "image")) {
+      // Without this line a promptless post looks identical whether the
+      // feature is off or broken, which is a miserable thing to debug.
+      visionNote =
+        "This post published no prompt, and no vision model is configured, so " +
+        "nothing was read from the images. Set one in the extension's options.";
     }
   }
 
@@ -359,7 +372,7 @@ async function savePost(post) {
     await writeFile(
       dir,
       "prompt.txt",
-      new Blob([promptText(post, reconstructed)], { type: "text/plain" })
+      new Blob([promptText(post, reconstructed, visionNote)], { type: "text/plain" })
     );
   } catch (e) {
     promptWritten = false;

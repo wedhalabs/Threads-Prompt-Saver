@@ -1,0 +1,8 @@
+{
+  "name": "threads-prompt-saver",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
