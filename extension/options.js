@@ -306,7 +306,9 @@ function renderModels(models) {
   if (!usable.length) html = `<div class="none">Nothing matches that filter.</div>`;
 
   list.innerHTML = html;
-  list.style.display = "";
+  // Explicitly "block": the hidden state lives in the stylesheet, so clearing
+  // the inline style would just let that rule hide it again.
+  list.style.display = "block";
   // Selecting must not collapse the list — comparing models means clicking
   // several in a row, and a <select> closed after every one of them.
   list.querySelectorAll("button.m").forEach((btn) => {
