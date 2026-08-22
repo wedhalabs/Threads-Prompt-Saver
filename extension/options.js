@@ -358,16 +358,14 @@ function testImageDataUrl() {
   return canvas.toDataURL("image/jpeg", 0.92);
 }
 
-$("testApi").addEventListener("click", async () => {
-  const baseUrl = $("apiBase").value.trim();
-  const model = $("apiModel").value.trim();
-  const apiKey = await currentKey();
-  if (!baseUrl || !apiKey || !model) { apiSay("Need all three: URL, key and model.", false); return; }
-  if (!(await ensureOrigin(baseUrl))) return;
-
-  apiSay(`Testing ${model}…`);
+/* One attempt. Returns why it failed rather than just that it did, because
+ * "the gateway dropped the image" and "this model can't read" look identical
+ * from the outside and lead to opposite next steps. */
+async function testModel(baseUrl, apiKey, model) {
+  let res;
+  let body;
   try {
-    const res = await fetch(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
+    res = await fetch(baseUrl.replace(/\/+$/, "") + "/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -382,32 +380,101 @@ $("testApi").addEventListener("click", async () => {
         }],
       }),
     });
-
-    const body = await res.text();
-    if (!res.ok) {
-      apiSay(`HTTP ${res.status}. ${body.slice(0, 200)}`, false);
-      return;
-    }
-
-    let reply = "";
-    try {
-      const data = JSON.parse(body);
-      reply = (data.choices && data.choices[0] && data.choices[0].message
-        && data.choices[0].message.content) || "";
-    } catch (e) {
-      apiSay("Endpoint returned something that isn't JSON.", false);
-      return;
-    }
-
-    if (String(reply).toUpperCase().includes(TEST_PHRASE)) {
-      apiSay(`${model} read the test image. Vision works.`, true);
-    } else if (!String(reply).trim()) {
-      apiSay(`${model} answered with nothing — it likely ignored the image.`, false);
-    } else {
-      apiSay(`${model} saw the image but read "${String(reply).trim().slice(0, 60)}" ` +
-             `instead of ${TEST_PHRASE}. Text may be too small for it, or it ignored the image.`, false);
-    }
+    body = await res.text();
   } catch (e) {
-    apiSay("Request failed: " + ((e && e.message) || e), false);
+    return { ok: false, detail: "request failed: " + ((e && e.message) || e) };
   }
+
+  if (!res.ok) return { ok: false, detail: `HTTP ${res.status} ${body.slice(0, 120)}` };
+
+  let reply = "";
+  try {
+    const data = JSON.parse(body);
+    reply = (data.choices && data.choices[0] && data.choices[0].message
+      && data.choices[0].message.content) || "";
+  } catch (e) {
+    return { ok: false, detail: "reply was not JSON" };
+  }
+
+  const said = String(reply).trim();
+  if (said.toUpperCase().includes(TEST_PHRASE)) return { ok: true, detail: "read the test image" };
+  if (!said) return { ok: false, detail: "answered with nothing" };
+
+  // The telling case: the model is fine, the gateway never passed the image on.
+  if (/no image|don.?t see|attach|upload/i.test(said)) {
+    return { ok: false, detail: "never received the image — this route strips it" };
+  }
+  return { ok: false, detail: `read "${said.slice(0, 40)}" instead` };
+}
+
+$("testApi").addEventListener("click", async () => {
+  const baseUrl = $("apiBase").value.trim();
+  const model = $("apiModel").value.trim();
+  const apiKey = await currentKey();
+  if (!baseUrl || !apiKey || !model) { apiSay("Need all three: URL, key and model.", false); return; }
+  if (!(await ensureOrigin(baseUrl))) return;
+
+  apiSay(`Testing ${model}…`);
+  const result = await testModel(baseUrl, apiKey, model);
+  apiSay(`${model} ${result.detail}.`, result.ok);
+});
+
+/* A gateway can strip images for a whole provider at once, so trying eight
+ * models from the same prefix proves nothing eight times. Take the best
+ * candidate from each provider first and move on the moment one route fails. */
+function autoCandidates(models) {
+  const byProvider = new Map();
+  models
+    .filter((m) => m.vision === true && !isImageMaker(m.id))
+    .sort((a, b) => readerRank(a.id) - readerRank(b.id) || a.id.localeCompare(b.id))
+    .forEach((m) => {
+      const key = providerOf(m.id);
+      if (!byProvider.has(key)) byProvider.set(key, []);
+      byProvider.get(key).push(m.id);
+    });
+
+  // Round-robin: every provider's best, then every provider's second, and so on.
+  const lists = Array.from(byProvider.values());
+  const out = [];
+  for (let depth = 0; depth < 3; depth++) {
+    lists.forEach((list) => { if (list[depth]) out.push(list[depth]); });
+  }
+  return out;
+}
+
+$("autoPick").addEventListener("click", async () => {
+  const baseUrl = $("apiBase").value.trim();
+  const apiKey = await currentKey();
+  if (!baseUrl || !apiKey) { apiSay("Need the URL and key first.", false); return; }
+  if (!fetchedModels.length) { apiSay("Press Fetch models first.", false); return; }
+  if (!(await ensureOrigin(baseUrl))) return;
+
+  const candidates = autoCandidates(fetchedModels).slice(0, 12);
+  if (!candidates.length) { apiSay("No model in that list claims to read images.", false); return; }
+
+  const deadProviders = new Set();
+  const tried = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const model = candidates[i];
+    // Once a route is proven to strip images, its other models cannot help.
+    if (deadProviders.has(providerOf(model))) continue;
+
+    apiSay(`Trying ${i + 1}/${candidates.length}: ${model}…`);
+    const result = await testModel(baseUrl, apiKey, model);
+
+    if (result.ok) {
+      $("apiModel").value = model;
+      await tpsSetApiConfig({ baseUrl, apiKey, model });
+      await refreshApi();
+      apiSay(`${model} works — saved. Tried ${tried.length + 1} model(s).`, true);
+      return;
+    }
+
+    tried.push(`${model} (${result.detail})`);
+    if (/strips it/.test(result.detail)) deadProviders.add(providerOf(model));
+  }
+
+  apiSay(`No model worked. ${tried.slice(0, 3).join("; ")}` +
+         (tried.length > 3 ? `; and ${tried.length - 3} more.` : ""), false);
 });
