@@ -81,3 +81,15 @@ export function dueThreads(threads, nowMs) {
     (t) => t.status === "ready" && typeof t.scheduledAt === "number" && t.scheduledAt <= nowMs
   );
 }
+
+/* Reuse a thread: keep the writing, drop every trace of the run that posted it. */
+export function resetThread(thread) {
+  return {
+    ...thread,
+    status: "draft",
+    postedAt: null,
+    postUrl: null,
+    updatedAt: Date.now(),
+    segments: thread.segments.map((s) => ({ text: s.text, postedAt: null, postUrl: null }))
+  };
+}

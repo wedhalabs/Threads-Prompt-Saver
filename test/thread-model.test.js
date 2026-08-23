@@ -96,3 +96,25 @@ test("dueThreads returns ready threads whose time has passed", () => {
   ];
   assert.deepEqual(dueThreads(threads, 500).map((t) => t.id), ["TP-001"]);
 });
+
+import { resetThread } from "../extension/thread-model.js";
+
+test("resetThread clears every posted marker and keeps the text", () => {
+  const posted = {
+    id: "TP-001", topic: "Tips", status: "posted",
+    scheduledAt: 100, postedAt: 200, postUrl: "https://threads.com/p/1",
+    createdAt: 1, updatedAt: 2,
+    segments: [
+      { text: "parent", postedAt: 200, postUrl: "https://threads.com/p/1" },
+      { text: "reply", postedAt: 210, postUrl: "https://threads.com/p/2" }
+    ]
+  };
+  const fresh = resetThread(posted);
+  assert.equal(fresh.status, "draft");
+  assert.equal(fresh.postedAt, null);
+  assert.equal(fresh.postUrl, null);
+  assert.deepEqual(fresh.segments.map((s) => s.text), ["parent", "reply"]);
+  assert.deepEqual(fresh.segments.map((s) => s.postedAt), [null, null]);
+  assert.deepEqual(fresh.segments.map((s) => s.postUrl), [null, null]);
+  assert.equal(fresh.id, "TP-001", "keeps its identity");
+});

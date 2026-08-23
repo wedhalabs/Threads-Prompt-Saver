@@ -25,6 +25,9 @@
     "page": "options.html",
     "open_in_tab": true
   },
+  "action": {
+    "default_title": "Threads Poster"
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -34,7 +37,10 @@
         "https://www.threads.com/*",
         "https://www.threads.net/*"
       ],
-      "js": ["extract.js", "content.js"],
+      "js": [
+        "extract.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

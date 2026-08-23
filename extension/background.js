@@ -150,3 +150,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .catch((e) => sendResponse({ ok: false, error: String((e && e.message) || e) }));
   return true; // keep the channel open for the async reply
 });
+
+/* The poster dashboard. Opening a tab needs no permission; reading its URL
+ * would, so we never do. */
+function openPoster(threadId) {
+  const base = chrome.runtime.getURL("poster.html");
+  chrome.tabs.create({ url: threadId ? `${base}?thread=${encodeURIComponent(threadId)}` : base });
+}
+
+chrome.action.onClicked.addListener(() => openPoster(null));
