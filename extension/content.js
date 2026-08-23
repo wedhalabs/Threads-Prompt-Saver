@@ -79,37 +79,17 @@
   /* Chrome never reveals where a chosen folder is, and no extension can open
    * one in the file manager. So rather than describe a location the user then
    * has to go and find, the extension reads the files back and shows them.
-   *
-   * Copying the path stays as the second option, for when the file manager is
-   * genuinely where you want to end up. */
+   * One button, because a folder name on the clipboard was never the thing
+   * anyone actually wanted. */
   function addSavedActions(reply) {
     const el = document.getElementById("tps-status");
-    if (!el) return;
+    if (!el || !reply.folderName) return;
 
-    // The main answer to "where did it go": show the files rather than send the
-    // user hunting for a folder Chrome refuses to locate for them.
-    if (reply.folderName) {
-      const show = linkButton("Show saved images and prompt");
-      show.addEventListener("click", () =>
-        chrome.runtime.sendMessage({ type: "open-saved", folder: reply.folderName })
-      );
-      el.appendChild(show);
-    }
-
-    const value = reply.fullPath || reply.folder;
-    const copy = linkButton(reply.fullPath ? "Copy folder path" : "Copy folder name");
-    copy.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(value);
-        copy.textContent = reply.fullPath
-          ? "Copied — paste into your file manager"
-          : "Copied the folder name";
-      } catch (e) {
-        // Clipboard can be refused; showing the value still lets them select it.
-        copy.textContent = value;
-      }
-    });
-    el.appendChild(copy);
+    const show = linkButton("Show saved images and prompt");
+    show.addEventListener("click", () =>
+      chrome.runtime.sendMessage({ type: "open-saved", folder: reply.folderName })
+    );
+    el.appendChild(show);
   }
 
   async function save() {

@@ -105,8 +105,23 @@ async function render(dir) {
   }
 }
 
+/* The on-disk location, if the user has told the options page where the save
+ * folder lives. Shown here rather than on the save toast: there is room for a
+ * long path on a page, and this is where someone looks when they want it. */
+async function showPath() {
+  try {
+    const root = await tpsGetFolderPath();
+    const { joinFolderPath } = await import("./path-util.js");
+    const full = joinFolderPath(root, FOLDER);
+    if (full) $("folderName").textContent = full;
+  } catch (e) {
+    /* no path configured: the folder name alone stands */
+  }
+}
+
 async function load() {
   $("folderName").textContent = FOLDER || "No folder given";
+  showPath();
   if (!FOLDER) {
     showOnly("This page needs a folder name. Open it from a saved post.");
     return;

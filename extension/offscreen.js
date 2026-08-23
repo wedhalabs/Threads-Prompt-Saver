@@ -475,17 +475,6 @@ async function savePost(post) {
     return { ok: false, reason: "write-failed", detail: failures.slice(0, 2).join("; ") };
   }
 
-  // A directory handle knows its name and nothing more, so the full path can
-  // only come from what the user told us once in the options page.
-  let fullPath = "";
-  try {
-    const root = await tpsGetFolderPath();
-    const { joinFolderPath } = await import("./path-util.js");
-    fullPath = joinFolderPath(root, folderName);
-  } catch (e) {
-    /* no path configured, or the module failed to load: the button stays hidden */
-  }
-
   return {
     ok: true,
     saved,
@@ -495,7 +484,6 @@ async function savePost(post) {
     // The bare name too: the page that shows what was saved looks the folder up
     // by it, and cannot use the display string above.
     folderName,
-    fullPath,
     failed: failures,
   };
 }
