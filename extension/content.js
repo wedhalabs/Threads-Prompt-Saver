@@ -44,12 +44,12 @@
       #tps-status.show { display: block; }
       #tps-status.ok { border-color: #2f7d55; color: #7ee2af; }
       #tps-status.err { border-color: #7d2f2f; color: #ff9b9b; }
-      #tps-open-options {
+      .tps-linkbtn {
         display: block; margin-top: 9px; padding: 6px 12px; border-radius: 8px;
         background: transparent; color: #e7e9ee; border: 1px solid #3a3f4b;
         font-size: 12.5px; font-weight: 600; cursor: pointer;
       }
-      #tps-open-options:hover { border-color: #6c8cff; }
+      .tps-linkbtn:hover { border-color: #6c8cff; }
     `;
     document.documentElement.appendChild(style);
   }
@@ -60,10 +60,7 @@
     el.textContent = text;
     el.className = "show" + (kind ? " " + kind : "");
     if (withOptions) {
-      const link = document.createElement("button");
-      link.type = "button";
-      link.id = "tps-open-options";
-      link.textContent = "Open options";
+      const link = linkButton("Open options");
       link.addEventListener("click", () =>
         chrome.runtime.sendMessage({ type: "open-options" })
       );
@@ -71,27 +68,49 @@
     }
   }
 
-  /* No extension can open a folder in the file manager, so the next best thing
-   * is handing over the path: paste it into the address bar and you are there.
-   * Only offered when the user has told the options page where the folder is. */
-  function addCopyPath(fullPath) {
-    const el = document.getElementById("tps-status");
-    if (!el || !fullPath) return;
-
+  function linkButton(label) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.id = "tps-open-options";
-    btn.textContent = "Copy path";
+    btn.className = "tps-linkbtn";
+    btn.textContent = label;
+    return btn;
+  }
+
+  /* No extension can open a folder in the file manager — Chrome never reveals
+   * where a chosen folder is. Handing over the path is the closest thing: paste
+   * it into the address bar and you land in the folder.
+   *
+   * The button always appears. Hiding it when no path is configured left the
+   * feature looking broken rather than unconfigured. */
+  function addCopyPath(fullPath, folder) {
+    const el = document.getElementById("tps-status");
+    if (!el) return;
+
+    const known = Boolean(fullPath);
+    const btn = linkButton(known ? "Copy folder path" : "Copy folder name");
+
     btn.addEventListener("click", async () => {
+      const value = known ? fullPath : folder;
       try {
-        await navigator.clipboard.writeText(fullPath);
-        btn.textContent = "Copied — paste in your file manager";
+        await navigator.clipboard.writeText(value);
+        btn.textContent = known
+          ? "Copied — paste into your file manager"
+          : "Copied the folder name — search for it";
       } catch (e) {
-        // Clipboard can be blocked; showing the path still lets them copy it.
-        btn.textContent = fullPath;
+        // Clipboard can be refused; showing the value still lets them select it.
+        btn.textContent = value;
       }
     });
     el.appendChild(btn);
+
+    if (known) return;
+
+    // Say what is missing, rather than quietly offering the lesser thing.
+    const setup = linkButton("Set the folder path once →");
+    setup.addEventListener("click", () =>
+      chrome.runtime.sendMessage({ type: "open-options" })
+    );
+    el.appendChild(setup);
   }
 
   async function save() {
@@ -134,7 +153,7 @@
         ? `\n${reply.failed.length} file(s) failed.`
         : "";
       setStatus(`Saved ${counts} to:\n${reply.folder}${partial}`, "ok");
-      addCopyPath(reply.fullPath);
+      addCopyPath(reply.fullPath, reply.folder);
     } catch (e) {
       if (!stillHere()) return;
       const msg = String(e && e.message ? e.message : e);
