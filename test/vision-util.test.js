@@ -113,3 +113,38 @@ test("treats the model reporting no prompt as reconstructed-empty", () => {
   assert.equal(out.kind, "reconstructed", "empty transcription is not a transcription");
   assert.equal(out.text, "");
 });
+
+import { PROMPT_MIN_CHARS, postCarriesPrompt } from "../extension/vision-util.js";
+
+const LONG = "Ultra-detailed futuristic product packaging mockup featuring the official ".repeat(4);
+
+test("a structured prompt attachment counts", () => {
+  assert.equal(postCarriesPrompt({ snippet: "a short one", parts: [] }), true);
+});
+
+test("a caption long enough to be a prompt counts", () => {
+  assert.ok(LONG.length >= PROMPT_MIN_CHARS, "fixture is long enough to matter");
+  assert.equal(postCarriesPrompt({ snippet: "", parts: [{ caption: LONG }] }), true);
+});
+
+test("a prompt posted in a reply counts", () => {
+  const post = { snippet: "", parts: [{ caption: "PROMPT down" }, { caption: LONG }] };
+  assert.equal(postCarriesPrompt(post), true);
+});
+
+test("short chatter does not count", () => {
+  // The floor-plan post: instructions, with the real prompt only in the image.
+  const caption = ".\n\nStep 1: Open ChatGPT/Gemini\nStep 2: Upload your floor plan\nStep 3: Write the Prompt";
+  assert.ok(caption.length < PROMPT_MIN_CHARS, "fixture is short enough to matter");
+  assert.equal(postCarriesPrompt({ snippet: "", parts: [{ caption }] }), false);
+});
+
+test("many short captions do not add up to a prompt", () => {
+  const parts = Array.from({ length: 12 }, () => ({ caption: "nice work!" }));
+  assert.equal(postCarriesPrompt({ snippet: "", parts }), false);
+});
+
+test("a post with nothing on it does not count", () => {
+  assert.equal(postCarriesPrompt({ snippet: "", parts: [] }), false);
+  assert.equal(postCarriesPrompt({}), false);
+});

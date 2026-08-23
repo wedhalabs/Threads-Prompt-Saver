@@ -112,9 +112,13 @@
     produce something similar, under <b>RECONSTRUCTED PROMPTS</b>, clearly marked
     as a guess. The two never share a section.
     <br /><br />
-    Leave blank and nothing is sent anywhere and nothing costs money. Filled in,
-    every image of a promptless post costs one API call — an 11-image carousel
-    is 11 calls.
+    A post that already carries its prompt is never sent anywhere, whether the
+    prompt sits in a prompt attachment, in the post itself, or in a follow-up
+    reply. That text is saved as written and costs nothing.
+    <br /><br />
+    Leave the fields blank and nothing is sent anywhere at all. Filled in, only
+    posts with no prompt to be found cost anything — one API call per image, so
+    an 11-image carousel is 11 calls.
   </div>
 
   <label class="row" for="apiBase" style="margin-top:14px;">API base URL</label>

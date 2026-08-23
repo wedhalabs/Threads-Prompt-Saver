@@ -421,9 +421,20 @@ async function savePost(post) {
 
   // Only when the post published no prompt of its own — there is nothing to
   // reconstruct otherwise, and every call costs the user money.
+  // Only when the post published no prompt of its own — whether as a structured
+  // attachment or as plain text in the post or a reply. Guessing at a prompt
+  // that is already saved above costs money and reads worse than the original.
   let reconstructed = [];
   let visionNote = "";
-  if (!(post.snippet || "").trim()) {
+  let alreadyHasPrompt = true;
+  try {
+    const { postCarriesPrompt } = await import("./vision-util.js");
+    alreadyHasPrompt = postCarriesPrompt(post);
+  } catch (e) {
+    alreadyHasPrompt = Boolean((post.snippet || "").trim());
+  }
+
+  if (!alreadyHasPrompt) {
     let apiConfig = null;
     try {
       apiConfig = await tpsGetApiConfig();

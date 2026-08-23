@@ -40,6 +40,25 @@ export function parseModelList(json) {
   return { models, error: null };
 }
 
+/* Threads marks a prompt as a structured attachment only when the author uses
+ * that feature. Most just type it into the post or a follow-up reply, and then
+ * the prompt is plainly there in the caption — calling a vision model to guess
+ * at it would cost money and produce a worse copy of text already saved.
+ *
+ * Length is what separates a prompt from chatter. "Step 1: Open ChatGPT…" runs
+ * to about ninety characters; a real image prompt runs to several hundred. The
+ * longest single caption decides, because a dozen short replies are a
+ * conversation, not a prompt. */
+export const PROMPT_MIN_CHARS = 200;
+
+export function postCarriesPrompt(post, minChars = PROMPT_MIN_CHARS) {
+  if (String((post && post.snippet) || "").trim()) return true;
+
+  return ((post && post.parts) || []).some(
+    (part) => String((part && part.caption) || "").trim().length >= minChars
+  );
+}
+
 const KINDS = ["transcribed", "reconstructed"];
 
 function stripFence(text) {
