@@ -41,7 +41,8 @@
       ],
       "js": [
         "extract.js",
-        "content.js"
+        "content.js",
+        "compose.js"
       ],
       "run_at": "document_idle"
     }
