@@ -27,3 +27,57 @@ export function validateThread(thread) {
   });
   return { ok: errors.length === 0, errors };
 }
+
+export function nextThreadId(lastId) {
+  const n = lastId ? parseInt(String(lastId).replace(/^TP-/, ""), 10) + 1 : 1;
+  return "TP-" + String(n).padStart(3, "0");
+}
+
+export function createThread(id) {
+  const now = Date.now();
+  return {
+    id,
+    topic: "",
+    status: "draft",
+    scheduledAt: null,
+    postedAt: null,
+    postUrl: null,
+    createdAt: now,
+    updatedAt: now,
+    segments: [{ text: "", postedAt: null, postUrl: null }]
+  };
+}
+
+/* Break long text into postable chunks, preferring whitespace so words survive. */
+export function splitText(text, max = MAX_CHARS) {
+  const chars = Array.from(text || "");
+  if (chars.length <= max) return [text || ""];
+
+  const out = [];
+  let rest = chars;
+  while (rest.length > max) {
+    let cut = -1;
+    for (let i = max; i > 0; i--) {
+      if (/\s/.test(rest[i])) { cut = i; break; }
+    }
+    if (cut <= 0) cut = max;              // one long word: break it
+    out.push(rest.slice(0, cut).join("").trim());
+    rest = rest.slice(cut);
+    while (rest.length && /\s/.test(rest[0])) rest = rest.slice(1);
+  }
+  if (rest.length) out.push(rest.join(""));
+  return out;
+}
+
+/* Import never deletes: incoming ids replace, unknown ids append. */
+export function mergeThreads(existing, incoming) {
+  const byId = new Map(existing.map((t) => [t.id, t]));
+  incoming.forEach((t) => byId.set(t.id, t));
+  return Array.from(byId.values());
+}
+
+export function dueThreads(threads, nowMs) {
+  return threads.filter(
+    (t) => t.status === "ready" && typeof t.scheduledAt === "number" && t.scheduledAt <= nowMs
+  );
+}
