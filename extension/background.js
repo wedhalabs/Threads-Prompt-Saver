@@ -131,6 +131,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 
+  /* Show what a save produced. Chrome never reveals where the chosen folder is,
+   * so the extension reads the files back and displays them instead. */
+  if (msg.type === "open-saved") {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("saved.html") +
+           "?folder=" + encodeURIComponent(msg.folder || ""),
+    });
+    sendResponse({ ok: true });
+    return;
+  }
+
   // Anything addressed to the offscreen document is not ours to handle.
   if (msg.target === "offscreen" || msg.type !== "save") return;
 

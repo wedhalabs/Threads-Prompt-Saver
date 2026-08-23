@@ -76,41 +76,40 @@
     return btn;
   }
 
-  /* No extension can open a folder in the file manager — Chrome never reveals
-   * where a chosen folder is. Handing over the path is the closest thing: paste
-   * it into the address bar and you land in the folder.
+  /* Chrome never reveals where a chosen folder is, and no extension can open
+   * one in the file manager. So rather than describe a location the user then
+   * has to go and find, the extension reads the files back and shows them.
    *
-   * The button always appears. Hiding it when no path is configured left the
-   * feature looking broken rather than unconfigured. */
-  function addCopyPath(fullPath, folder) {
+   * Copying the path stays as the second option, for when the file manager is
+   * genuinely where you want to end up. */
+  function addSavedActions(reply) {
     const el = document.getElementById("tps-status");
     if (!el) return;
 
-    const known = Boolean(fullPath);
-    const btn = linkButton(known ? "Copy folder path" : "Copy folder name");
+    // The main answer to "where did it go": show the files rather than send the
+    // user hunting for a folder Chrome refuses to locate for them.
+    if (reply.folderName) {
+      const show = linkButton("Show saved images and prompt");
+      show.addEventListener("click", () =>
+        chrome.runtime.sendMessage({ type: "open-saved", folder: reply.folderName })
+      );
+      el.appendChild(show);
+    }
 
-    btn.addEventListener("click", async () => {
-      const value = known ? fullPath : folder;
+    const value = reply.fullPath || reply.folder;
+    const copy = linkButton(reply.fullPath ? "Copy folder path" : "Copy folder name");
+    copy.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(value);
-        btn.textContent = known
+        copy.textContent = reply.fullPath
           ? "Copied — paste into your file manager"
-          : "Copied the folder name — search for it";
+          : "Copied the folder name";
       } catch (e) {
         // Clipboard can be refused; showing the value still lets them select it.
-        btn.textContent = value;
+        copy.textContent = value;
       }
     });
-    el.appendChild(btn);
-
-    if (known) return;
-
-    // Say what is missing, rather than quietly offering the lesser thing.
-    const setup = linkButton("Set the folder path once →");
-    setup.addEventListener("click", () =>
-      chrome.runtime.sendMessage({ type: "open-options" })
-    );
-    el.appendChild(setup);
+    el.appendChild(copy);
   }
 
   async function save() {
@@ -153,7 +152,7 @@
         ? `\n${reply.failed.length} file(s) failed.`
         : "";
       setStatus(`Saved ${counts} to:\n${reply.folder}${partial}`, "ok");
-      addCopyPath(reply.fullPath, reply.folder);
+      addSavedActions(reply);
     } catch (e) {
       if (!stillHere()) return;
       const msg = String(e && e.message ? e.message : e);

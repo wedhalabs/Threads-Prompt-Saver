@@ -492,6 +492,9 @@ async function savePost(post) {
     images,
     videos,
     folder: `${handle.name}/${folderName}`,
+    // The bare name too: the page that shows what was saved looks the folder up
+    // by it, and cannot use the display string above.
+    folderName,
     fullPath,
     failed: failures,
   };
