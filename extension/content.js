@@ -71,6 +71,29 @@
     }
   }
 
+  /* No extension can open a folder in the file manager, so the next best thing
+   * is handing over the path: paste it into the address bar and you are there.
+   * Only offered when the user has told the options page where the folder is. */
+  function addCopyPath(fullPath) {
+    const el = document.getElementById("tps-status");
+    if (!el || !fullPath) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "tps-open-options";
+    btn.textContent = "Copy path";
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(fullPath);
+        btn.textContent = "Copied — paste in your file manager";
+      } catch (e) {
+        // Clipboard can be blocked; showing the path still lets them copy it.
+        btn.textContent = fullPath;
+      }
+    });
+    el.appendChild(btn);
+  }
+
   async function save() {
     const btn = document.getElementById(SAVE_BTN);
     btn.disabled = true;
@@ -111,6 +134,7 @@
         ? `\n${reply.failed.length} file(s) failed.`
         : "";
       setStatus(`Saved ${counts} to:\n${reply.folder}${partial}`, "ok");
+      addCopyPath(reply.fullPath);
     } catch (e) {
       if (!stillHere()) return;
       const msg = String(e && e.message ? e.message : e);

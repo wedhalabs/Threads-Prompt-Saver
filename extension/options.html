@@ -80,6 +80,18 @@
     Each post gets its own folder here, named after its prompt, holding its
     images, videos and <b>prompt.txt</b>.
   </div>
+
+  <label class="row" for="folderPath" style="margin-top:14px;">
+    Where is that folder? <span style="font-weight:400;opacity:.7;">(optional)</span>
+  </label>
+  <input type="text" id="folderPath" placeholder="D:\Download\Threads\Prompt" />
+  <div class="hint">
+    Chrome never tells an extension where a chosen folder actually is, and no
+    extension can open one in your file manager. Type the path once and each
+    saved post offers a <b>Copy path</b> button — paste it into your file
+    manager's address bar to land straight in that post's folder. Used for that
+    button and nothing else; saving does not go through it.
+  </div>
   <div class="hint">
     <button id="forget" class="ghost" type="button">Clear folder</button>
   </div>

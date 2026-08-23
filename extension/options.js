@@ -91,6 +91,17 @@ $("forget").addEventListener("click", async () => {
   flash("Folder cleared.");
 });
 
+/* Saved as you type rather than behind a button: there is nothing to validate,
+ * and a path typed but not saved would silently do nothing. */
+tpsGetFolderPath()
+  .then((path) => { $("folderPath").value = path || ""; })
+  .catch(() => {});
+
+$("folderPath").addEventListener("change", async () => {
+  await tpsSetFolderPath($("folderPath").value.trim()).catch(() => {});
+  flash("Path saved.");
+});
+
 /* ---- optional prompt reconstruction settings ----------------------------- */
 
 function apiFlash(text, ok) {

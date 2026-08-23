@@ -20,6 +20,9 @@ const TPS_FOLDERS_KEY = "postFolders";
  * needs no storage permission; it never leaves this machine except as a request
  * to the endpoint the user configured. */
 const TPS_API_KEY = "apiConfig";
+/* Display only: the on-disk location of the chosen folder, so a saved post can
+ * offer its full path to copy. */
+const TPS_PATH_KEY = "folderPath";
 
 function tpsOpenDb() {
   return new Promise((resolve, reject) => {
@@ -89,6 +92,30 @@ async function tpsSetApiConfig(config) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(TPS_STORE, "readwrite");
     tx.objectStore(TPS_STORE).put(config, TPS_API_KEY);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/* Where the chosen folder lives on disk, typed by the user. A directory handle
+ * never reveals its path and no API can open one in the file manager, so this
+ * exists purely so the save toast can offer a path to copy. Never used to open
+ * or write anything. */
+async function tpsGetFolderPath() {
+  const db = await tpsOpenDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TPS_STORE, "readonly");
+    const req = tx.objectStore(TPS_STORE).get(TPS_PATH_KEY);
+    req.onsuccess = () => resolve(req.result || "");
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function tpsSetFolderPath(path) {
+  const db = await tpsOpenDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TPS_STORE, "readwrite");
+    tx.objectStore(TPS_STORE).put(path, TPS_PATH_KEY);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
