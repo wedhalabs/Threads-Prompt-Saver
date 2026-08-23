@@ -175,8 +175,19 @@ function promptText(post, transcribedPrompts, visionNote) {
       if (caption) lines.push(caption, "");
     }
   }
+  /* A post often publishes several prompts, numbered by the author and each in
+   * its own reply. All of them belong here; only the longest names the folder. */
+  const published = post.publishedPrompts || [];
   const snippet = (post.snippet || "").trim();
-  if (snippet) lines.push("=".repeat(70), "MASTER PROMPT", "=".repeat(70), snippet, "");
+
+  if (published.length > 1) {
+    lines.push("=".repeat(70), `PROMPTS PUBLISHED IN THIS POST (${published.length})`, "=".repeat(70), "");
+    published.forEach((text, i) => {
+      lines.push("-".repeat(70), `Prompt ${i + 1}`, "-".repeat(70), text, "");
+    });
+  } else if (snippet) {
+    lines.push("=".repeat(70), "MASTER PROMPT", "=".repeat(70), snippet, "");
+  }
 
   // Only words the author actually wrote reach this file. Nothing here is a
   // guess, so nothing needs a disclaimer saying it might be one.
@@ -405,6 +416,13 @@ async function savePost(post) {
   // Only when the post published no prompt of its own — whether as a structured
   // attachment or as plain text in the post or a reply. Guessing at a prompt
   // that is already saved above costs money and reads worse than the original.
+  try {
+    const { dedupeSnippets } = await import("./snippets.js");
+    post.publishedPrompts = dedupeSnippets(post.snippets);
+  } catch (e) {
+    post.publishedPrompts = (post.snippets || []).filter(Boolean);
+  }
+
   let transcribedPrompts = [];
   let visionNote = "";
   let alreadyHasPrompt = true;

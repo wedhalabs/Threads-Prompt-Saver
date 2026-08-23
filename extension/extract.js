@@ -124,7 +124,11 @@
       const sa = n.snippet_attachment_info;
       if (!sa) return;
       const frags = ((sa.text_fragments || {}).fragments) || [];
-      for (const fr of frags) if (fr && fr.plaintext) out.push(fr.plaintext);
+      // One attachment is one prompt. Threads may split it into fragments, and
+      // treating each as its own prompt made the longest fragment stand in for
+      // the whole thing — a long prompt was saved truncated.
+      const text = frags.map((fr) => (fr && fr.plaintext) || "").join("");
+      if (text.trim()) out.push(text);
     });
     return out;
   }
@@ -286,6 +290,9 @@
         title,
         caption: mainCaption,
         snippet,
+        // Every prompt the post published, in the order it published them. The
+        // longest still names the folder, but the rest are no longer discarded.
+        snippets: allSnippets,
         parts,
         media,
       },
