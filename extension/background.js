@@ -159,3 +159,19 @@ function openPoster(threadId) {
 }
 
 chrome.action.onClicked.addListener(() => openPoster(null));
+
+/* One alarm per scheduled thread, named after its id. The alarm only raises a
+ * notification; nothing opens or posts until the author clicks. */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  chrome.notifications.create(alarm.name, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Thread ready to publish",
+    message: `${alarm.name} is due. Click to open it.`,
+  });
+});
+
+chrome.notifications.onClicked.addListener((id) => {
+  chrome.notifications.clear(id);
+  openPoster(id);
+});
