@@ -150,3 +150,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     .catch((e) => sendResponse({ ok: false, error: String((e && e.message) || e) }));
   return true; // keep the channel open for the async reply
 });
+
+/* The poster dashboard. Opening a tab needs no permission; reading its URL
+ * would, so we never do. */
+function openPoster(threadId) {
+  const base = chrome.runtime.getURL("poster.html");
+  chrome.tabs.create({ url: threadId ? `${base}?thread=${encodeURIComponent(threadId)}` : base });
+}
+
+chrome.action.onClicked.addListener(() => openPoster(null));
+
+/* One alarm per scheduled thread, named after its id. The alarm only raises a
+ * notification; nothing opens or posts until the author clicks. */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  chrome.notifications.create(alarm.name, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Thread ready to publish",
+    message: `${alarm.name} is due. Click to open it.`,
+  });
+});
+
+chrome.notifications.onClicked.addListener((id) => {
+  chrome.notifications.clear(id);
+  openPoster(id);
+});
+
+/* The dashboard owns the session; this worker only carries messages, so a
+ * sleeping worker cannot lose the author's place in a chain. */
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === "tps-posted") {
+    chrome.runtime.sendMessage({ type: "tps-posted-relay", url: msg.url });
+  }
+});
