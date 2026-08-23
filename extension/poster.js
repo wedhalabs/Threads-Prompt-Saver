@@ -257,3 +257,114 @@ async function ensureCsvDir() {
 }
 
 boot();
+
+/* ---- publish session ---------------------------------------------------- */
+
+/* Mirrors meta.session in memory so the tab's "any work for me?" message can
+ * be answered synchronously. IndexedDB stays the durable copy. */
+let sessionCache = null;
+let pendingSegment = null;
+
+function armSegment() {
+  if (!sessionCache) { pendingSegment = null; return; }
+  const thread = threads.find((t) => t.id === sessionCache.threadId);
+  pendingSegment = thread ? thread.segments[sessionCache.index].text : null;
+}
+
+async function setSession(session) {
+  sessionCache = session;
+  await setMeta("session", session);
+  armSegment();
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+  if (msg && msg.type === "tps-ready") {
+    respond({ text: pendingSegment });
+    return true;
+  }
+  if (msg && msg.type === "tps-posted-relay") advanceSession(msg.url);
+});
+
+async function startSession(thread) {
+  const check = validateThread(thread);
+  if (!check.ok) {
+    banner(`Fix ${check.errors.length} segment(s) before publishing.`);
+    return;
+  }
+  if (thread.status === "draft") { thread.status = "ready"; await save(thread); }
+
+  await setSession({ threadId: thread.id, index: 0 });
+  document.body.classList.add("publishing");
+  renderSession();
+  await chrome.tabs.create({ url: "https://www.threads.com/" });
+}
+
+async function advanceSession(url) {
+  const session = sessionCache;
+  if (!session) return;
+  const thread = threads.find((t) => t.id === session.threadId);
+  if (!thread) return;
+
+  thread.segments[session.index].postUrl = url || null;
+  thread.segments[session.index].postedAt = Date.now();
+  if (session.index === 0) thread.postUrl = url || null;
+
+  const next = session.index + 1;
+  if (next >= thread.segments.length) {
+    thread.status = "posted";
+    thread.postedAt = Date.now();
+    await save(thread);
+    await setSession(null);
+    document.body.classList.remove("publishing");
+    render();
+    return;
+  }
+  await save(thread);
+  await setSession({ ...session, index: next });
+  renderSession();
+}
+
+function renderSession() {
+  const session = sessionCache;
+  if (!session) return;
+  const thread = threads.find((t) => t.id === session.threadId);
+  if (!thread) return;
+
+  const head = document.querySelector(".session-head");
+  head.querySelector("b").textContent = `Publishing "${thread.topic || thread.id}"`;
+  head.querySelector(".progress").innerHTML = thread.segments.map((s, i) =>
+    `<div class="pdot ${i < session.index ? "done" : i === session.index ? "now" : ""}"></div>`
+  ).join("");
+
+  const inner = document.querySelector(".session-inner");
+  inner.querySelector(".step-of").textContent =
+    `Step ${session.index + 1} of ${thread.segments.length} · ` +
+    (session.index === 0 ? "Parent post" : "Reply " + session.index);
+  inner.querySelector(".preview").textContent = thread.segments[session.index].text;
+}
+
+async function resumeSession() {
+  const session = await getMeta("session");
+  if (!session) return;
+  sessionCache = session;
+  armSegment();
+  document.body.classList.add("publishing");
+  renderSession();
+}
+
+document.querySelector(".editor-foot .btn.primary").addEventListener("click", () => {
+  const t = threads.find((x) => x.id === selectedId);
+  if (t) startSession(t);
+});
+
+/* "I posted it" carries the pasted URL when detection missed it. */
+document.querySelector(".session-actions .btn:last-child").addEventListener("click", () => {
+  const pasted = document.querySelector(".fallback input").value.trim();
+  advanceSession(pasted || null);
+});
+
+document.querySelector(".session-head .btn.ghost").addEventListener("click", () => {
+  document.body.classList.remove("publishing");
+});
+
+resumeSession();

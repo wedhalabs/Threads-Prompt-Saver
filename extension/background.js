@@ -175,3 +175,11 @@ chrome.notifications.onClicked.addListener((id) => {
   chrome.notifications.clear(id);
   openPoster(id);
 });
+
+/* The dashboard owns the session; this worker only carries messages, so a
+ * sleeping worker cannot lose the author's place in a chain. */
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg && msg.type === "tps-posted") {
+    chrome.runtime.sendMessage({ type: "tps-posted-relay", url: msg.url });
+  }
+});
