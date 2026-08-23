@@ -35,32 +35,29 @@ function extensionFor(kind, url, contentType) {
   return kind === "video" ? "mp4" : "jpg";
 }
 
-/* ---- optional prompt reading -------------------------------------------- *
- * Some posts publish the prompt behind them; those are captured verbatim.
- * For the rest, a configured vision model looks at each saved image and does
- * one of two very different jobs:
+/* ---- reading prompts printed on images ---------------------------------- *
+ * Most posts publish their prompt as text, in the post or in a follow-up
+ * reply, and that text is saved exactly as written without any model involved.
  *
- *   transcribed  — the prompt is printed on the image, as on the carousel
- *                  slides that share a prompt as a picture. Those words are
- *                  the author's own and are copied out exactly.
- *   reconstructed — nothing is written on the image, so the model describes a
- *                  prompt that would produce something similar. A guess.
+ * Some publish it as a picture instead: a slide with the prompt printed on it.
+ * Those words are the author's own but are pixels, so a configured vision
+ * model copies them out verbatim.
  *
- * prompt.txt keeps them in separate sections. Blurring the two would stamp the
- * author's real words as a guess, or worse, dress a guess up as their words.
+ * It only ever copies. An image with no prompt written on it yields nothing —
+ * describing the picture back as an invented prompt is not wanted, and would
+ * fill the file with words the author never wrote.
  * ------------------------------------------------------------------------- */
 
 const VISION_SYSTEM =
-  "You are given a single image. Decide which case it is.\n" +
-  "1. If prompt text is WRITTEN ON the image — a slide, screenshot or infographic " +
-  "showing a prompt — transcribe that text EXACTLY as written. Preserve wording, " +
-  "line breaks and punctuation. Do not summarise, translate, correct or improve it. " +
-  "Ignore surrounding labels such as a heading that only reads \"Prompt:\".\n" +
-  "2. Otherwise, write ONE prompt (4-7 sentences) that could be fed to an image " +
-  "generator to produce a similar image: subject, composition, typography, colour " +
-  "palette, lighting and overall style.\n" +
+  "You are given a single image. Your only job is to copy out prompt text that " +
+  "is WRITTEN ON it — a slide, screenshot or infographic showing a prompt.\n" +
+  "If such text is present, transcribe it EXACTLY as written. Preserve wording, " +
+  "line breaks and punctuation. Do not summarise, translate, correct or improve " +
+  "it. Ignore surrounding labels such as a heading that only reads \"Prompt:\".\n" +
+  "If no prompt is written on the image, say so. Never invent a prompt, and never " +
+  "describe the picture — a description is not wanted and will be discarded.\n" +
   "Reply with JSON only, no markdown fence: " +
-  '{"kind":"transcribed"|"reconstructed","text":"..."}';
+  '{"kind":"transcribed","text":"..."} or {"kind":"none","text":""}';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -101,7 +98,7 @@ async function toJpegDataUrl(blob) {
   return canvas.toDataURL("image/jpeg", 0.92);
 }
 
-async function reconstructPrompt(blob, config) {
+async function readPromptFrom(blob, config) {
   const dataUrl = await toJpegDataUrl(blob);
   const res = await fetch(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
     method: "POST",
@@ -117,7 +114,7 @@ async function reconstructPrompt(blob, config) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Transcribe the prompt written on this image, or write one for it." },
+            { type: "text", text: "Copy out the prompt written on this image, if there is one." },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
@@ -134,31 +131,33 @@ async function reconstructPrompt(blob, config) {
   return parseVisionReply(text);
 }
 
+/* Returns what was found, plus enough about what wasn't to explain an empty
+ * result. "No prompt on these images" and "the gateway never delivered them"
+ * produce the same silence otherwise, and only one of them is fine. */
 async function readAllPrompts(files, config) {
-  const out = [];
+  const found = [];
+  const problems = [];
+  let looked = 0;
+  let undelivered = 0;
+
   for (const file of files) {
     if (file.kind !== "image") continue;
+    looked++;
     try {
-      const reply = await reconstructPrompt(file.blob, config);
-      // Record an empty answer rather than dropping it: a silent skip is
-      // indistinguishable from the feature being switched off.
-      out.push({
-        name: file.name,
-        kind: reply.kind,
-        text: reply.text || "[the model returned nothing]",
-      });
+      const reply = await readPromptFrom(file.blob, config);
+      if (reply.kind === "transcribed") {
+        found.push({ name: file.name, text: reply.text });
+      } else if (/no image|don.?t see|attach|upload/i.test(reply.raw || "")) {
+        undelivered++;
+      }
     } catch (e) {
-      out.push({
-        name: file.name,
-        kind: "reconstructed",
-        text: `[could not read: ${(e && e.message) || e}]`,
-      });
+      problems.push(`${file.name}: ${(e && e.message) || e}`);
     }
   }
-  return out;
+  return { found, problems, looked, undelivered };
 }
 
-function promptText(post, reconstructed, visionNote) {
+function promptText(post, transcribedPrompts, visionNote) {
   const lines = [
     "PROMPT",
     `Source: ${post.url || ""}`,
@@ -179,19 +178,16 @@ function promptText(post, reconstructed, visionNote) {
   const snippet = (post.snippet || "").trim();
   if (snippet) lines.push("=".repeat(70), "MASTER PROMPT", "=".repeat(70), snippet, "");
 
-  // Two sections, never one. Text read off an image is the author's own and
-  // must not carry the guess disclaimer; a guess must never lose it.
-  const found = reconstructed || [];
-  const transcribed = found.filter((item) => item.kind === "transcribed");
-  const guessed = found.filter((item) => item.kind !== "transcribed");
-
+  // Only words the author actually wrote reach this file. Nothing here is a
+  // guess, so nothing needs a disclaimer saying it might be one.
+  const transcribed = transcribedPrompts || [];
   if (transcribed.length) {
     lines.push(
       "=".repeat(70),
       "PROMPTS READ FROM THE IMAGES",
       "=".repeat(70),
       "This post published its prompt as a picture rather than as text. A vision",
-      "model transcribed the words printed on each image, so this IS the author's",
+      "model copied out the words printed on each image, so this IS the author's",
       "own prompt — check it against the image if the wording looks odd.",
       ""
     );
@@ -200,26 +196,11 @@ function promptText(post, reconstructed, visionNote) {
     }
   }
 
-  if (guessed.length) {
-    lines.push(
-      "=".repeat(70),
-      "RECONSTRUCTED PROMPTS",
-      "=".repeat(70),
-      "No prompt was written on these images, so a vision model described one",
-      "that would produce something similar. They are a guess, and are NOT the",
-      "prompt the author actually used.",
-      ""
-    );
-    for (const item of guessed) {
-      lines.push("-".repeat(70), item.name, "-".repeat(70), item.text, "");
-    }
-  }
-
   if (visionNote) {
     lines.push("=".repeat(70), "NOTE", "=".repeat(70), visionNote, "");
   }
 
-  if (!snippet && !parts.length && !(reconstructed && reconstructed.length)) {
+  if (!snippet && !parts.length && !(transcribedPrompts && transcribedPrompts.length)) {
     lines.push("[no caption or prompt text on this post]");
   }
   return lines.join("\n").replace(/\s+$/, "") + "\n";
@@ -420,11 +401,11 @@ async function savePost(post) {
   }
 
   // Only when the post published no prompt of its own — there is nothing to
-  // reconstruct otherwise, and every call costs the user money.
+  // read otherwise, and every call costs the user money.
   // Only when the post published no prompt of its own — whether as a structured
   // attachment or as plain text in the post or a reply. Guessing at a prompt
   // that is already saved above costs money and reads worse than the original.
-  let reconstructed = [];
+  let transcribedPrompts = [];
   let visionNote = "";
   let alreadyHasPrompt = true;
   try {
@@ -442,7 +423,27 @@ async function savePost(post) {
       /* no config stored */
     }
     if (apiConfig && apiConfig.baseUrl && apiConfig.apiKey && apiConfig.model) {
-      reconstructed = await readAllPrompts(written, apiConfig);
+      const result = await readAllPrompts(written, apiConfig);
+      transcribedPrompts = result.found;
+
+      if (!result.found.length && result.looked) {
+        if (result.undelivered) {
+          // The failure that wasted an afternoon once: a route that answers
+          // cheerfully while never passing the picture along.
+          visionNote =
+            `The vision model never received ${result.undelivered} of ${result.looked} ` +
+            "image(s) — it replied asking for one. The endpoint is not forwarding " +
+            "images. Open the extension's options and press \"Find one that works\".";
+        } else {
+          visionNote =
+            `No prompt text is written on ${result.looked === 1 ? "this image" : "these images"}, ` +
+            "so nothing was copied out. The post's own words are above.";
+        }
+      }
+      if (result.problems.length) {
+        visionNote += (visionNote ? "\n\n" : "") +
+          "Some images could not be read: " + result.problems.slice(0, 3).join("; ");
+      }
     } else if (written.some((f) => f.kind === "image")) {
       // Without this line a promptless post looks identical whether the
       // feature is off or broken, which is a miserable thing to debug.
@@ -459,7 +460,7 @@ async function savePost(post) {
       "prompt.txt",
       // Leading BOM: prompts are full of typographic dashes and curly quotes,
       // and Windows editors render UTF-8 as mojibake unless told what it is.
-      new Blob(["﻿" + promptText(post, reconstructed, visionNote)],
+      new Blob(["﻿" + promptText(post, transcribedPrompts, visionNote)],
                { type: "text/plain;charset=utf-8" })
     );
   } catch (e) {

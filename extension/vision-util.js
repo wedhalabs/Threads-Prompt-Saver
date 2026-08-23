@@ -59,7 +59,11 @@ export function postCarriesPrompt(post, minChars = PROMPT_MIN_CHARS) {
   );
 }
 
-const KINDS = ["transcribed", "reconstructed"];
+/* Only two outcomes matter: the image carried prompt text, or it did not.
+ * Describing a picture back as an invented prompt is not wanted — it costs a
+ * call, fills the file with something the author never wrote, and reads worse
+ * than the image it came from. */
+const KINDS = ["transcribed", "none"];
 
 function stripFence(text) {
   return text.replace(/^\s*```[a-z]*\s*/i, "").replace(/\s*```\s*$/, "");
@@ -96,19 +100,22 @@ function salvage(text) {
   return { kind: kind ? kind[1] : undefined, text: unescaped };
 }
 
-/* Anything uncertain becomes "reconstructed". Mislabelling a guess as the
- * author's own words is the harmful direction; the reverse is only modest. */
+/* Anything uncertain becomes "none". Only a reply that says plainly it is a
+ * transcription, and carries text, is written into prompt.txt as the author's
+ * words; loose prose is the model describing or refusing, and is discarded.
+ * The raw reply is kept so a route that never delivered the image can still be
+ * told apart from an image that genuinely has no prompt on it. */
 export function parseVisionReply(raw) {
   const text = String(raw === null || raw === undefined ? "" : raw).trim();
-  if (!text) return { kind: "reconstructed", text: "" };
+  const nothing = { kind: "none", text: "", raw: text };
+  if (!text) return nothing;
 
   const stripped = stripFence(text).trim();
   const parsed = firstJsonObject(stripped) || salvage(stripped);
+  if (!parsed || typeof parsed.text !== "string") return nothing;
 
-  if (parsed && typeof parsed.text === "string") {
-    const claimed = KINDS.includes(parsed.kind) ? parsed.kind : "reconstructed";
-    // An empty transcription is not a transcription.
-    return { kind: parsed.text.trim() ? claimed : "reconstructed", text: parsed.text };
-  }
-  return { kind: "reconstructed", text: stripped };
+  const claimed = KINDS.includes(parsed.kind) ? parsed.kind : "none";
+  if (claimed !== "transcribed" || !parsed.text.trim()) return nothing;
+
+  return { kind: "transcribed", text: parsed.text, raw: text };
 }

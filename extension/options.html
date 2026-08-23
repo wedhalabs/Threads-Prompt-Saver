@@ -101,16 +101,16 @@
   <legend>Read prompts from images <span style="font-weight:400;opacity:.7;">(optional)</span></legend>
   <div class="hint" style="margin-top:0;">
     When a post publishes its prompt as text, that text is saved exactly as
-    written. When it doesn't, a vision model looks at each saved image and does
-    one of two things.
+    written. When it doesn't, a vision model looks at each saved image for a
+    prompt printed on it.
     <br /><br />
     If the prompt is <b>printed on the image</b> — the carousel slides that share
     a prompt as a picture — it is copied out word for word, under
     <b>PROMPTS READ FROM THE IMAGES</b>. That is the author's own prompt.
     <br /><br />
-    If nothing is written on the image, the model describes a prompt that would
-    produce something similar, under <b>RECONSTRUCTED PROMPTS</b>, clearly marked
-    as a guess. The two never share a section.
+    If nothing is written on the image, nothing is saved for it. The model only
+    ever copies words the author wrote; it never invents a prompt or describes
+    the picture back to you.
     <br /><br />
     A post that already carries its prompt is never sent anywhere, whether the
     prompt sits in a prompt attachment, in the post itself, or in a follow-up

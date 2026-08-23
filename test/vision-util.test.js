@@ -54,64 +54,64 @@ test("reports an endpoint that returned no models", () => {
 
 import { parseVisionReply } from "../extension/vision-util.js";
 
-test("reads a clean JSON reply", () => {
-  const out = parseVisionReply('{"kind":"transcribed","text":"Transform a sketch."}');
-  assert.deepEqual(out, { kind: "transcribed", text: "Transform a sketch." });
-});
-
-test("reads JSON wrapped in a code fence", () => {
-  const raw = '```json\n{"kind":"transcribed","text":"Hello"}\n```';
-  assert.deepEqual(parseVisionReply(raw), { kind: "transcribed", text: "Hello" });
-});
-
-test("reads JSON buried in prose", () => {
-  const raw = 'Sure! {"kind":"reconstructed","text":"A brown slide."} Hope that helps.';
-  assert.deepEqual(parseVisionReply(raw), { kind: "reconstructed", text: "A brown slide." });
-});
-
 const NL = String.fromCharCode(10);
 const TWO_LINES = "first line" + NL + "second line";
 
+test("reads a transcription", () => {
+  const out = parseVisionReply('{"kind":"transcribed","text":"Transform a sketch."}');
+  assert.equal(out.kind, "transcribed");
+  assert.equal(out.text, "Transform a sketch.");
+});
+
+test("reads a transcription wrapped in a code fence", () => {
+  const raw = '```json' + NL + '{"kind":"transcribed","text":"Hello"}' + NL + '```';
+  assert.equal(parseVisionReply(raw).kind, "transcribed");
+  assert.equal(parseVisionReply(raw).text, "Hello");
+});
+
 test("keeps newlines inside the transcribed text", () => {
-  // JSON.stringify escapes the newline properly, as a well-behaved model would.
   const raw = JSON.stringify({ kind: "transcribed", text: TWO_LINES });
   assert.equal(parseVisionReply(raw).text, TWO_LINES);
 });
 
 test("salvages JSON broken by a raw newline in the text", () => {
-  // A model transcribing a multi-line prompt often emits a real newline inside
-  // the string instead, which is invalid JSON. The words must still survive.
   const raw = '{"kind":"transcribed","text":"' + TWO_LINES + '"}';
   const out = parseVisionReply(raw);
   assert.equal(out.kind, "transcribed", "the words are still verbatim");
   assert.equal(out.text, TWO_LINES);
 });
 
-test("treats bare text as reconstructed, never as verbatim", () => {
-  const out = parseVisionReply("A photorealistic render of a house.");
-  assert.deepEqual(out, { kind: "reconstructed", text: "A photorealistic render of a house." });
+test("reports no prompt when the model says none", () => {
+  const out = parseVisionReply('{"kind":"none","text":""}');
+  assert.equal(out.kind, "none");
+  assert.equal(out.text, "");
 });
 
-test("falls back to reconstructed when kind is unrecognised", () => {
-  const out = parseVisionReply('{"kind":"ocr","text":"Some words"}');
-  assert.equal(out.kind, "reconstructed", "an unknown label must not claim verbatim");
-  assert.equal(out.text, "Some words");
+test("an empty transcription is no transcription", () => {
+  assert.equal(parseVisionReply('{"kind":"transcribed","text":"   "}').kind, "none");
 });
 
-test("falls back to reconstructed when text is missing", () => {
-  const out = parseVisionReply('{"kind":"transcribed"}');
-  assert.equal(out.kind, "reconstructed");
+test("prose that is not a transcription is discarded, never invented into one", () => {
+  // The model describing the picture, or refusing, must not reach prompt.txt.
+  const out = parseVisionReply("A brown slide showing two floor plans on white cards.");
+  assert.equal(out.kind, "none");
+  assert.equal(out.text, "");
+});
+
+test("an unrecognised kind is treated as no prompt", () => {
+  assert.equal(parseVisionReply('{"kind":"reconstructed","text":"a guess"}').kind, "none");
+  assert.equal(parseVisionReply('{"kind":"ocr","text":"words"}').kind, "none");
 });
 
 test("handles an empty reply", () => {
-  assert.deepEqual(parseVisionReply(""), { kind: "reconstructed", text: "" });
-  assert.deepEqual(parseVisionReply(null), { kind: "reconstructed", text: "" });
+  assert.equal(parseVisionReply("").kind, "none");
+  assert.equal(parseVisionReply(null).kind, "none");
 });
 
-test("treats the model reporting no prompt as reconstructed-empty", () => {
-  const out = parseVisionReply('{"kind":"transcribed","text":""}');
-  assert.equal(out.kind, "reconstructed", "empty transcription is not a transcription");
-  assert.equal(out.text, "");
+test("keeps the raw reply so a broken route can still be diagnosed", () => {
+  const out = parseVisionReply("I don't see an image attached.");
+  assert.equal(out.kind, "none");
+  assert.match(out.raw, /don't see an image/);
 });
 
 import { PROMPT_MIN_CHARS, postCarriesPrompt } from "../extension/vision-util.js";
