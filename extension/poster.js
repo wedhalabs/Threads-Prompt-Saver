@@ -10,8 +10,9 @@ import {
 } from "./poster-store.js";
 import {
   createThread, nextThreadId, countChars, MAX_CHARS, validateThread, resetThread,
-  dueThreads,
+  dueThreads, mergeThreads,
 } from "./thread-model.js";
+import { parseThreads, serializeThreads } from "./csv.js";
 
 let threads = [];
 let selectedId = null;
@@ -368,3 +369,48 @@ document.querySelector(".session-head .btn.ghost").addEventListener("click", () 
 });
 
 resumeSession();
+
+/* ---- CSV import and export ---------------------------------------------- *
+ * Import is how a batch of ideas written elsewhere becomes threads here: a
+ * spreadsheet of topics and text, one row per segment.
+ * ------------------------------------------------------------------------- */
+
+const [importBtn, exportBtn] = document.querySelectorAll(".topbar .btn.ghost");
+
+importBtn.addEventListener("click", () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".csv,text/csv";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    const { threads: incoming, errors } = parseThreads(await file.text());
+    if (errors.length) {
+      // Nothing is imported when anything is wrong: a partial import leaves the
+      // author guessing which half landed.
+      banner(`Import cancelled. ${errors.length} bad row(s): ` +
+             errors.slice(0, 3).map((e) => `line ${e.line} — ${e.error}`).join("; "));
+      return;
+    }
+
+    threads = mergeThreads(threads, incoming);
+    for (const t of threads) await putThread(t);
+    await writeCsvMirror();
+    banner("");
+    render();
+  });
+  input.click();
+});
+
+/* A download rather than the folder mirror: export answers "give me the file
+ * now", which should not depend on a folder having been chosen. */
+exportBtn.addEventListener("click", () => {
+  const blob = new Blob([serializeThreads(threads)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "threads-content.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
