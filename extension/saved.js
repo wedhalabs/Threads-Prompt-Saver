@@ -111,12 +111,34 @@ async function render(dir) {
 async function showPath() {
   try {
     const root = await tpsGetFolderPath();
-    const { joinFolderPath } = await import("./path-util.js");
+    const { joinFolderPath, toFileUrl } = await import("./path-util.js");
     const full = joinFolderPath(root, FOLDER);
-    if (full) $("folderName").textContent = full;
+    if (!full) return;
+
+    $("folderName").textContent = full;
+    offerToOpen(toFileUrl(full));
   } catch (e) {
     /* no path configured: the folder name alone stands */
   }
+}
+
+/* Chrome's own directory listing, not the file manager — no extension can open
+ * that. It needs "Allow access to file URLs", which is off by default, so ask
+ * Chrome first: a button that silently does nothing is worse than no button. */
+function offerToOpen(url) {
+  if (!url) return;
+  $("openRow").style.display = "";
+
+  chrome.extension.isAllowedFileSchemeAccess((allowed) => {
+    if (!allowed) {
+      $("openFolder").disabled = true;
+      $("openHint").textContent =
+        'Turn on "Allow access to file URLs" for this extension at chrome://extensions to enable this.';
+      return;
+    }
+    $("openHint").textContent = "Opens Chrome's file listing for this folder.";
+    $("openFolder").addEventListener("click", () => chrome.tabs.create({ url }));
+  });
 }
 
 async function load() {
