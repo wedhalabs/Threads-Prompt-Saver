@@ -3,3 +3,4 @@ chrome_profile_copy/
 __pycache__/
 config.json
 threads_session.json
+docs/superpowers/
