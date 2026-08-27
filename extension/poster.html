@@ -327,11 +327,11 @@
       <div class="editor-foot">
         <div class="sched">
           <span>Remind me</span>
-          <input type="datetime-local" value="2026-08-18T09:00" />
+          <input type="datetime-local" />
         </div>
         <div class="spacer"></div>
-        <button class="btn ghost">Save draft</button>
-        <button class="btn primary" onclick="document.body.classList.add('publishing')">Start publishing →</button>
+        <button class="btn ghost">Mark ready</button>
+        <button class="btn primary">Start publishing →</button>
       </div>
 
       <!-- ---------- publish session (mode, not modal) ---------- -->
@@ -346,7 +346,7 @@
             <div class="pdot"></div>
           </div>
           <div class="spacer"></div>
-          <button class="btn ghost" onclick="document.body.classList.remove('publishing')">Pause session</button>
+          <button class="btn ghost">Pause session</button>
         </div>
 
         <div class="session-body">
@@ -362,7 +362,6 @@
             <div class="session-actions">
               <div class="waiting"><span class="pulse"></span> Waiting for you to post…</div>
               <div class="spacer"></div>
-              <button class="btn ghost">Skip</button>
               <button class="btn">I posted it — next →</button>
             </div>
 

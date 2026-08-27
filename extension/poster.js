@@ -148,6 +148,10 @@ function renderEditor() {
   when.value = t.scheduledAt
     ? new Date(t.scheduledAt - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
     : "";
+
+  const ready = foot.querySelector(".btn.ghost");
+  ready.textContent = t.status === "ready" ? "Back to draft" : "Mark ready";
+  ready.disabled = t.status === "posted";
 }
 
 async function save(thread) {
@@ -206,6 +210,25 @@ async function boot() {
     if (!t) return;
     t.topic = e.target.value;
     await save(t); renderList();
+  });
+
+  /* The only way to reach "ready" other than publishing. Reminders sweep for
+   * ready threads, so without this a scheduled draft could never come due. */
+  $(".editor-foot .btn.ghost").addEventListener("click", async () => {
+    const t = threads.find((x) => x.id === selectedId);
+    if (!t || t.status === "posted") return;
+
+    if (t.status === "draft") {
+      const check = validateThread(t);
+      if (!check.ok) {
+        banner(`Fix ${check.errors.length} segment(s) before marking this ready.`);
+        return;
+      }
+      t.status = "ready";
+    } else {
+      t.status = "draft";
+    }
+    await save(t); render();
   });
 
   $(".editor-foot input[type=datetime-local]").addEventListener("change", async (e) => {
