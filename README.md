@@ -10,6 +10,8 @@ Everything runs inside your normal, already-signed-in Chrome. Private and
 followers-only posts work with no separate login, nothing is uploaded anywhere,
 and there is no server, account or subscription involved.
 
+![One click on a Threads post writes its images, video and prompt text into a folder named after the post, inside a folder named after its author](docs/what-a-save-produces.svg)
+
 ---
 
 ## Saving a post

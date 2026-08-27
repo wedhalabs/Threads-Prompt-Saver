@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 360" width="920" height="360"
+     role="img" aria-label="A Threads post is saved into a folder named after its author, containing the post's images, video and prompt.txt">
+  <title>What a save produces</title>
+  <desc>One click on a Threads post writes its images, video and prompt text into a folder named after the post, inside a folder named after its author.</desc>
+
+  <!-- Cards carry their own dark surface rather than relying on the page, so the
+       diagram reads the same on a light or a dark README. -->
+  <style>
+    .card   { fill: #12161f; stroke: #242936; stroke-width: 1.5; }
+    .inner  { fill: #1c212c; stroke: #333a4a; stroke-width: 1; }
+    .label  { fill: #8b93a7; font: 600 11px -apple-system, "Segoe UI", Roboto, sans-serif;
+              letter-spacing: 1.2px; text-transform: uppercase; }
+    .body   { fill: #e7e9ee; font: 400 14px -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono   { fill: #e7e9ee; font: 400 14px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+    .dim    { fill: #8b93a7; }
+    .accent { fill: #8aa2ff; }
+    .ok     { fill: #7ee2af; }
+    .rule   { stroke: #242936; stroke-width: 1; }
+  </style>
+
+  <!-- ── the post ─────────────────────────────────────────────────────── -->
+  <rect class="card" x="16" y="30" width="288" height="300" rx="14"/>
+  <text class="label" x="40" y="62">A Threads post</text>
+  <text class="body dim" x="40" y="84" font-size="13">@luthfikim_</text>
+
+  <rect class="inner" x="40" y="100" width="72" height="72" rx="8"/>
+  <rect class="inner" x="124" y="100" width="72" height="72" rx="8"/>
+  <rect class="inner" x="208" y="100" width="72" height="72" rx="8"/>
+  <circle cx="60" cy="122" r="7" fill="#333a4a"/>
+  <path d="M46 160 l20 -22 l16 18 l10 -10 l16 14 z" fill="#333a4a"/>
+  <circle cx="144" cy="122" r="7" fill="#333a4a"/>
+  <path d="M130 160 l20 -22 l16 18 l10 -10 l16 14 z" fill="#333a4a"/>
+  <circle cx="228" cy="122" r="7" fill="#333a4a"/>
+  <path d="M214 160 l20 -22 l16 18 l10 -10 l16 14 z" fill="#333a4a"/>
+
+  <rect x="40" y="190" width="240" height="9" rx="4.5" fill="#242936"/>
+  <rect x="40" y="207" width="196" height="9" rx="4.5" fill="#242936"/>
+
+  <rect x="40" y="234" width="112" height="28" rx="14" fill="#6c8cff1f" stroke="#6c8cff" stroke-width="1"/>
+  <text class="accent" x="58" y="253" font-size="12.5" font-family="-apple-system, Segoe UI, Roboto, sans-serif">Read more</text>
+  <text class="dim" x="40" y="292" font-size="12">the prompt lives behind it</text>
+
+  <!-- ── the click ────────────────────────────────────────────────────── -->
+  <text class="label accent" x="326" y="172" letter-spacing="1">SAVE POST</text>
+  <line x1="326" y1="188" x2="380" y2="188" stroke="#6c8cff" stroke-width="2"/>
+  <path d="M380 182 l10 6 l-10 6 z" fill="#6c8cff"/>
+
+  <!-- ── the folder ───────────────────────────────────────────────────── -->
+  <rect class="card" x="404" y="30" width="500" height="300" rx="14"/>
+  <text class="label" x="428" y="62">On your disk</text>
+
+  <text class="mono" x="428" y="94">your folder/</text>
+  <text class="mono dim" x="428" y="120">└── <tspan class="accent">luthfikim_/</tspan></text>
+  <text class="mono dim" x="428" y="146">    └── <tspan fill="#e7e9ee">AI_MICRO_STORYBOARD_V3/</tspan></text>
+  <text class="mono dim" x="428" y="172">        ├── <tspan fill="#e7e9ee">image1.webp … image10.webp</tspan></text>
+  <text class="mono dim" x="428" y="198">        ├── <tspan fill="#e7e9ee">video1.mp4</tspan></text>
+  <text class="mono dim" x="428" y="224">        └── <tspan class="ok">prompt.txt</tspan></text>
+
+  <line class="rule" x1="428" y1="248" x2="880" y2="248"/>
+  <text class="label" x="428" y="272">Inside prompt.txt</text>
+  <text class="body dim" x="428" y="298" font-size="13">the post's own text · the prompt behind <tspan fill="#e7e9ee">Read more</tspan></text>
+  <text class="body dim" x="428" y="318" font-size="13">· any prompt printed on the images</text>
+</svg>
