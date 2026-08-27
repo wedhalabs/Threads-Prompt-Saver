@@ -136,7 +136,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "open-saved") {
     chrome.tabs.create({
       url: chrome.runtime.getURL("saved.html") +
-           "?folder=" + encodeURIComponent(msg.folder || ""),
+           "?folder=" + encodeURIComponent(msg.folder || "") +
+           "&author=" + encodeURIComponent(msg.author || ""),
     });
     sendResponse({ ok: true });
     return;

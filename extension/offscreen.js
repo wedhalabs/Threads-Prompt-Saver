@@ -374,12 +374,22 @@ async function savePost(post) {
     }
   }
 
+  /* Posts are grouped by whoever wrote them, so one author's work sits
+   * together rather than scattered through a flat list of prompt names.
+   *
+   * resolveFolderName takes the parent as an argument, so handing it the
+   * author's folder nests everything a level deeper while keeping the check
+   * that a folder is provably this extension's before anything in it is
+   * pruned. */
+  const authorFolder = sanitizeSegment(post.author, "unknown_author");
+
   let folderName;
   let owned;
   let dir;
   try {
-    ({ name: folderName, owned } = await resolveFolderName(handle, post));
-    dir = await handle.getDirectoryHandle(folderName, { create: true });
+    const authorDir = await handle.getDirectoryHandle(authorFolder, { create: true });
+    ({ name: folderName, owned } = await resolveFolderName(authorDir, post));
+    dir = await authorDir.getDirectoryHandle(folderName, { create: true });
   } catch (e) {
     return { ok: false, reason: "write-failed", detail: String(e && e.message) };
   }
@@ -498,9 +508,10 @@ async function savePost(post) {
     saved,
     images,
     videos,
-    folder: `${handle.name}/${folderName}`,
-    // The bare name too: the page that shows what was saved looks the folder up
-    // by it, and cannot use the display string above.
+    folder: `${handle.name}/${authorFolder}/${folderName}`,
+    // The bare names too: the page that shows what was saved walks down to the
+    // folder by them, and cannot use the display string above.
+    authorFolder,
     folderName,
     failed: failures,
   };

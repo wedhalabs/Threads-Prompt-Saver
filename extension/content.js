@@ -87,7 +87,9 @@
 
     const show = linkButton("Show saved images and prompt");
     show.addEventListener("click", () =>
-      chrome.runtime.sendMessage({ type: "open-saved", folder: reply.folderName })
+      chrome.runtime.sendMessage({
+          type: "open-saved", folder: reply.folderName, author: reply.authorFolder,
+        })
     );
     el.appendChild(show);
   }

@@ -13,7 +13,9 @@
  */
 
 const $ = (id) => document.getElementById(id);
-const FOLDER = new URLSearchParams(location.search).get("folder") || "";
+const PARAMS = new URLSearchParams(location.search);
+const FOLDER = PARAMS.get("folder") || "";
+const AUTHOR = PARAMS.get("author") || "";
 
 const IMAGE_RE = /\.(jpg|jpeg|png|webp|gif)$/i;
 const VIDEO_RE = /\.(mp4|webm|mov)$/i;
@@ -112,7 +114,10 @@ async function showPath() {
   try {
     const root = await tpsGetFolderPath();
     const { joinFolderPath, toFileUrl } = await import("./path-util.js");
-    const full = joinFolderPath(root, FOLDER);
+    // Posts saved before authors were introduced sit at the root, so only add
+    // the author level when this post actually has one.
+    const parent = AUTHOR ? joinFolderPath(root, AUTHOR) : root;
+    const full = joinFolderPath(parent, FOLDER);
     if (!full) return;
 
     $("folderName").textContent = full;
@@ -142,7 +147,7 @@ function offerToOpen(url) {
 }
 
 async function load() {
-  $("folderName").textContent = FOLDER || "No folder given";
+  $("folderName").textContent = (AUTHOR ? AUTHOR + " / " : "") + (FOLDER || "No folder given");
   showPath();
   if (!FOLDER) {
     showOnly("This page needs a folder name. Open it from a saved post.");
@@ -173,12 +178,25 @@ async function load() {
     return;
   }
 
-  let dir;
-  try {
-    dir = await root.getDirectoryHandle(FOLDER, { create: false });
-  } catch (e) {
-    showOnly(`No folder named "${FOLDER}" is in your save folder any more.`);
-    return;
+  /* Posts are filed under their author now. Anything saved before that change
+   * still sits at the root, so try the author's folder first and fall back —
+   * an older post must not read as missing. */
+  let dir = null;
+  if (AUTHOR) {
+    try {
+      const authorDir = await root.getDirectoryHandle(AUTHOR, { create: false });
+      dir = await authorDir.getDirectoryHandle(FOLDER, { create: false });
+    } catch (e) {
+      dir = null;
+    }
+  }
+  if (!dir) {
+    try {
+      dir = await root.getDirectoryHandle(FOLDER, { create: false });
+    } catch (e) {
+      showOnly(`No folder named "${FOLDER}" is in your save folder any more.`);
+      return;
+    }
   }
 
   try {
